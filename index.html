@@ -127,6 +127,17 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .calc{background:var(--hop-soft);border-radius:8px;padding:8px 10px;font-size:.84rem;display:flex;flex-direction:column;gap:4px;line-height:1.55}
 .calc-res{font-size:.95rem}
 .calc .muted{color:var(--muted)}
+.gtable-wrap{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--line);padding-top:10px;overflow-x:auto}
+.gtable{width:100%;border-collapse:collapse;font-size:.82rem}
+.gtable th{font-weight:500;color:var(--muted);font-size:.72rem;text-align:right;padding:2px 4px}
+.gtable th:nth-child(2){text-align:left}
+.gtable td{padding:5px 4px;border-top:1px solid var(--line);text-align:right;white-space:nowrap}
+.gtable td:nth-child(1){color:var(--muted);width:1.5em}
+.gtable td:nth-child(2){text-align:left;white-space:normal}
+.gtable tr.r-same td:nth-child(n+3){color:var(--muted)}
+.gtable tr.r-calc td:nth-child(4){color:var(--accent);font-weight:600}
+.gtable tr.r-meas td:nth-child(4){color:var(--hop);font-weight:600}
+.gtable .dot{font-size:.6rem}
 .addrow{align-self:flex-start;background:none;border:1px dashed var(--line);border-radius:8px;padding:5px 12px;font-size:.85rem;color:var(--accent)}
 .meas{border-top:1px dashed var(--line);padding-top:10px;display:flex;flex-direction:column;gap:6px}
 .meas-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
@@ -164,33 +175,32 @@ textarea{width:100%;font:inherit;font-size:.9rem;border:1px solid var(--line);bo
 const KEY='brew-notes-v1';
 const STYLES={
   lauter:{name:'ロイタータン',desc:'マッシュタンで糖化し、ロイタータンで濾過する全粒仕込み',
-    tpl:['water','malt','protein','mash','mashout','sparge','boil','cool','trub','aerate','dilute','yeast'],
-    picks:['water','malt','acid','protein','mash','decoction','mashout','sparge','boil','cool','trub','aerate','dilute','yeast']},
+    tpl:['water','malt','protein','mash','mashout','boil','cool','trub','aerate','dilute','yeast'],
+    picks:['water','malt','acid','protein','mash','decoction','mashout','boil','cool','trub','aerate','dilute','yeast']},
   biab:{name:'BIAB',desc:'モルトを袋に入れ、ひとつの鍋で糖化から煮沸まで行う',
     tpl:['water','malt','mash','mashout','bag','boil','cool','trub','aerate','dilute','yeast'],
     picks:['water','malt','acid','protein','mash','mashout','bag','boil','cool','trub','aerate','dilute','yeast']},
   extract:{name:'DME・モルト缶',desc:'モルトエキスを湯に溶かして作る。糖化なし',
-    tpl:['heat','dissolve','boil','cool','dilute','aerate','yeast'],
+    tpl:['water','dissolve','boil','cool','dilute','aerate','yeast'],
     picks:['water','heat','dissolve','boil','cool','trub','dilute','aerate','yeast']}
 };
 const T='temp',M='time';
 const fTemp=(l='温度',d)=>({k:'temp',l,u:'℃',d});
 const fTime=(l='時間',d)=>({k:'time',l,u:'分',d});
 const TYPES={
-  water:{n:'水質調整',sub:'乳酸・塩カルなどを添加',fields:[{k:'vol',l:'水量',u:'L'}],
+  water:{n:'水質調整',sub:'仕込みに使う水と添加物',fields:[{k:'vol',l:'水量（マッシング＋スパージングの合計）',u:'L'}],
     list:{k:'adds',kind:'add',ph:'添加物の名前',def:[{name:'乳酸 (88%)',amt:'',unit:'ml'},{name:'塩化カルシウム',amt:'',unit:'g'}]},
     hint:'添加物の種類と量は、あとで詳しく設定できるようにする予定です'},
   malt:{n:'モルト投入',sub:'使うモルトと量',list:{k:'malts',kind:'kg',ph:'モルト名',def:[{name:'ピルスナーモルト',amt:'',yld:'80'}]}},
   acid:{n:'アシッドレスト',sub:'pHを下げる休止',fields:[fTemp('温度',35),fTime('時間',20)]},
   protein:{n:'プロテインレスト',sub:'タンパク分解の休止',fields:[fTemp('温度',52),fTime('時間',15)]},
-  mash:{n:'マッシング',sub:'糖化。ここで比重を計算',fields:[fTemp('温度',66),fTime('時間',60),{k:'eff',l:'糖化効率',u:'%',d:75},{k:'abs',l:'モルト吸水量',u:'L/kg',d:1}]},
+  mash:{n:'マッシング',sub:'糖化。スパージング後の比重を計算',fields:[fTemp('温度',66),fTime('時間',60),{k:'eff',l:'糖化効率',u:'%',d:72},{k:'abs',l:'モルト吸水量',u:'L/kg',d:1}]},
   decoction:{n:'デコクション',sub:'一部を煮出して戻す',fields:[{k:'pull',l:'取り出し量',u:'L'},fTemp('目標温度',72),fTime('煮沸時間',15)]},
   mashout:{n:'マッシュアウト',sub:'酵素を止める',fields:[fTemp('温度',76),fTime('時間',10)]},
-  sparge:{n:'スパージング',sub:'湯をかけて糖を洗い出す',fields:[{k:'vol',l:'湯量',u:'L'},fTemp('湯温',78)]},
   bag:{n:'バッグ引き上げ',sub:'袋を上げて水を切る',fields:[fTime('水切り時間',10)]},
   heat:{n:'湯沸かし',sub:'エキスを溶かす湯',fields:[{k:'vol',l:'水量',u:'L'},fTemp('温度',70)]},
   dissolve:{n:'エキス溶解',sub:'DME・モルト缶を溶かす',list:{k:'malts',kind:'kg',ph:'DME / モルト缶',def:[{name:'モルト缶',amt:'1.7',yld:'78'}]}},
-  boil:{n:'ボイル',sub:'煮沸。蒸発で比重が上がる',fields:[fTime('時間',60),{k:'evap',l:'蒸発量',u:'L'}]},
+  boil:{n:'ボイル',sub:'煮沸。灰汁で液量が減り、蒸発で比重が上がる',fields:[fTime('時間',60),{k:'aku',l:'灰汁として捨てる量',u:'L'},{k:'evap',l:'蒸発量',u:'L'}]},
   cool:{n:'冷却',sub:'酵母投入温度まで下げる',fields:[fTemp('目標温度',20),fTime('時間',null)]},
   trub:{n:'澱引き',sub:'澱を除いて液量が減る',fields:[{k:'loss',l:'除去量',u:'L'}]},
   aerate:{n:'エアレーション',sub:'酸素を溶かし込む',fields:[fTime('時間',5)]},
@@ -205,7 +215,7 @@ let db=load(), view={screen:'home',rid:null}, sheet=false, armed=null;
 
 function uid(){return Math.random().toString(36).slice(2,9)}
 function load(){
-  try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&Array.isArray(s.recipes))return s}catch(e){}
+  try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&Array.isArray(s.recipes)){s.recipes.forEach(r=>{r.steps=r.steps.filter(x=>TYPES[x.type])});return s}}catch(e){}
   return {recipes:[sample()]};
 }
 function save(){try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){}}
@@ -221,13 +231,12 @@ function mkStep(type,style){
 function sample(){
   const r={id:uid(),name:'例：ジャーマンピルス 20L',style:'lauter',updated:Date.now(),steps:[]};
   const add=(type,p={},meas={},extra={})=>{const s=mkStep(type);Object.assign(s.p,p);Object.assign(s.meas,meas);Object.assign(s,extra);s.open=false;r.steps.push(s)};
-  add('water',{vol:'17'},{}, {list:[{name:'乳酸 (88%)',amt:'2',unit:'ml'},{name:'塩化カルシウム',amt:'3',unit:'g'}]});
+  add('water',{vol:'29'},{}, {list:[{name:'乳酸 (88%)',amt:'2',unit:'ml'},{name:'塩化カルシウム',amt:'3',unit:'g'}]});
   add('malt',{},{}, {list:[{name:'ピルスナーモルト',amt:'4.6',yld:'80'},{name:'ミュンヘンモルト',amt:'0.4',yld:'78'}]});
   add('protein',{temp:'52',time:'15'});
-  add('mash',{temp:'65',time:'60',eff:'85',abs:'1'});
+  add('mash',{temp:'65',time:'60',eff:'75',abs:'1'});
   add('mashout',{temp:'76',time:'10'});
-  add('sparge',{vol:'12',temp:'78'});
-  add('boil',{time:'70',evap:'4'},{sg:'1.051'});
+  add('boil',{time:'70',aku:'0.5',evap:'4'},{sg:'1.052'});
   add('cool',{temp:'12',time:'30'});
   add('trub',{loss:'2'});
   add('dilute',{add:'',target:'1.048'});
@@ -243,35 +252,39 @@ const fsg=v=>v==null?'—':v.toFixed(3);
 const plato=sg=>-616.868+1111.14*sg-630.272*sg*sg+135.997*sg*sg*sg;
 
 /* 比重・液量の追跡
-   マッシング：溶け出すエキス(kg) = Σ モルト量 × 収率 × 糖化効率。仕込み水と混ざった液の濃度(°P)から比重を出し、
-   モルトが吸った水を除いた分を麦汁量とする。スパージングは湯を足してよく混ざったものとして計算。
-   加水・蒸発では糖の総量が変わらず、澱引きでは比重が変わらない */
-const DEF={yld:80,eff:75,abs:1};
+   マッシング：糖化効率は、マッシングからスパージング完了までで麦汁に取り出せるエキスの割合。
+   取り出せるエキス(kg) = Σ モルト量 × 収率 × 糖化効率。仕込み水の合計からモルトの吸水を引いた水に溶けているとして、
+   濃度(°P)から比重を出す。これがスパージング完了後（ボイル前）の麦汁。
+   ボイル：灰汁で液量が減り（比重は同じ）、蒸発で糖の総量はそのまま濃くなる。澱引きは比重そのまま、加水は薄まる */
+const DEF={yld:80,eff:72,abs:1};
 const sgFromP=P=>1+P/(258.6-(P/258.2)*227.1);
-function mixMash(m){const W=m.water,Wc=Math.max(0,W-m.abs),P=100*m.E/(W+m.E),sg=sgFromP(P),Ec=W>0?m.E*Wc/W:0;return {sg,vol:(Wc+Ec)/sg,P}}
+function wortOf(E,W){const P=100*E/(W+E),sg=sgFromP(P);return {sg,P,vol:(W+E)/sg}}
 function track(r){
-  let vol=null,sg=null,water=0,kg=0,pot=0,mash=null,inMash=false;const out=[];
+  let vol=null,sg=null,water=0,kg=0,pot=0,done=false;const out=[];
   for(const s of r.steps){
     const before={vol,sg};let changed=false,info=null;
     if(s.type==='water'||s.type==='heat')water+=n(s.p.vol)||0;
     if((s.type==='malt'||s.type==='dissolve')&&s.list)s.list.forEach(it=>{const k=n(it.amt);if(k){kg+=k;pot+=k*(n(it.yld)??DEF.yld)/100}});
-    if(s.type==='mash'&&!mash){
-      const eff=n(s.p.eff)??DEF.eff,ab=n(s.p.abs)??DEF.abs;
-      info={kind:'mash',kg,pot,water,eff,absL:ab*kg};
-      if(pot>0&&water>0){mash={E:pot*eff/100,water,abs:ab*kg};const m=mixMash(mash);vol=m.vol;sg=m.sg;changed=true;inMash=true;Object.assign(info,{E:mash.E,P:m.P,vol,sg})}
+    if(s.type==='mash'&&!done){
+      const eff=n(s.p.eff)??DEF.eff,ab=n(s.p.abs)??DEF.abs,absL=ab*kg;
+      info={kind:'mash',kg,pot,water,eff,absL};
+      if(pot>0&&water>absL){const E=pot*eff/100,w=wortOf(E,water-absL);vol=w.vol;sg=w.sg;changed=true;done=true;Object.assign(info,{E,P:w.P,vol,sg})}
     }
     if(s.type==='dissolve'){
       info={kind:'dissolve',kg,pot,water};
-      if(pot>0&&water>0){mash={E:pot,water,abs:0};const m=mixMash(mash);vol=m.vol;sg=m.sg;changed=true;inMash=true;Object.assign(info,{E:pot,P:m.P,vol,sg})}
+      if(pot>0&&water>0){const w=wortOf(pot,water);vol=w.vol;sg=w.sg;changed=true;done=true;Object.assign(info,{E:pot,P:w.P,vol,sg})}
     }
-    if(s.type==='sparge'&&inMash){const sv=n(s.p.vol);if(sv){mash.water+=sv;const m=mixMash(mash);vol=m.vol;sg=m.sg;changed=true}}
-    if(s.type==='boil'){inMash=false;const e=n(s.p.evap);if(e&&vol!=null&&vol>e){if(sg!=null)sg=1+(sg-1)*vol/(vol-e);vol-=e;changed=true}}
+    if(s.type==='boil'&&vol!=null){
+      const ak=n(s.p.aku),e=n(s.p.evap);
+      if(ak){vol=Math.max(0,vol-ak);changed=true}
+      if(e&&vol>e){if(sg!=null)sg=1+(sg-1)*vol/(vol-e);vol-=e;changed=true}
+    }
     if(s.type==='trub'){const l=n(s.p.loss);if(l&&vol!=null){vol=Math.max(0,vol-l);changed=true}}
     if(s.type==='dilute'){const a=n(s.p.add);if(a&&vol!=null){if(sg!=null)sg=1+(sg-1)*vol/(vol+a);vol+=a;changed=true}}
     const mv=n(s.meas.vol),ms=n(s.meas.sg);
     let src=changed?'calc':null;
     if(mv!=null){vol=mv;src='meas'}
-    if(ms!=null){sg=ms;src='meas';if(inMash&&ms>1){const P=plato(ms);mash.E=mash.water*P/(100-P)}}
+    if(ms!=null){sg=ms;src='meas'}
     out.push({before,vol,sg,src,info});
   }
   return out;
@@ -279,12 +292,12 @@ function track(r){
 function calcInfo(s,t){
   const i=t.info;if(!i)return '';
   const isMash=i.kind==='mash';
-  if(!i.kg)return `<p class="hint">この工程より前の「${isMash?'モルト投入':'エキス溶解'}」に量を入れると、${isMash?'マッシング後':'溶解後'}の比重を計算します。</p>`;
-  if(!i.water)return `<p class="hint">この工程より前の「${isMash?'水質調整':'湯沸かし'}」に水量を入れると、比重を計算します。</p>`;
+  if(!i.kg)return `<p class="hint">この工程より前の「${isMash?'モルト投入':'エキス溶解'}」に量を入れると、${isMash?'スパージング完了後':'溶解後'}の比重を計算します。</p>`;
+  if(!i.water||(isMash&&i.water<=i.absL))return `<p class="hint">この工程より前の「水質調整」に、マッシングとスパージングで使う水量の合計を入れると、比重を計算します。</p>`;
   const lines=isMash
-    ?`モルト <span class="num">${i.kg.toFixed(2)} kg</span>（エキス最大 <span class="num">${i.pot.toFixed(2)} kg</span>）× 糖化効率 <span class="num">${i.eff}%</span> = <b class="num">${i.E.toFixed(2)} kg</b> が溶け出す<br>仕込み水 <span class="num">${fv(i.water)} L</span> − モルトの吸水 <span class="num">${fv(i.absL)} L</span>`
+    ?`モルト <span class="num">${i.kg.toFixed(2)} kg</span>（エキス最大 <span class="num">${i.pot.toFixed(2)} kg</span>）× 糖化効率 <span class="num">${i.eff}%</span> = <b class="num">${i.E.toFixed(2)} kg</b> を取り出す<br>仕込み水の合計 <span class="num">${fv(i.water)} L</span> − モルトの吸水 <span class="num">${fv(i.absL)} L</span>`
     :`エキス <span class="num">${i.kg.toFixed(2)} kg</span> × 収率 = <b class="num">${i.E.toFixed(2)} kg</b>、水 <span class="num">${fv(i.water)} L</span>`;
-  return `<div class="calc"><div>${lines}</div><div class="calc-res">→ <b class="num">${fv(i.vol)} L</b> / <b class="num">SG ${fsg(i.sg)}</b> <span class="num muted">${i.P.toFixed(1)}°P</span></div></div>`;
+  return `<div class="calc"><div>${lines}</div><div class="calc-res">${isMash?'スパージング完了後の麦汁 ':''}→ <b class="num">${fv(i.vol)} L</b> / <b class="num">SG ${fsg(i.sg)}</b> <span class="num muted">${i.P.toFixed(1)}°P</span></div></div>`;
 }
 function totalTime(r){return r.steps.reduce((a,s)=>a+(n(s.p.time)||0),0)}
 
@@ -331,8 +344,8 @@ function editorHTML(){
     <div class="namebox"><input id="rname" type="text" data-f="recipe|name" value="${esc(r.name)}" placeholder="仕込みの名前"></div>
     <span class="chip">${STYLES[r.style].name}</span></div>
   <section class="summary" id="summary">${summaryInner(r,tr,lastK,tt)}</section>
-  ${r.steps.length?`<div class="steps">${r.steps.map((s,i)=>stepHTML(r,s,i,tr[i])).join('')}</div>`
-  :`<div class="empty-steps"><p>工程がまだありません。ひとつずつ追加するか、${STYLES[r.style].name}の標準的な流れをまとめて入れられます。</p><button class="secondary" data-act="tpl">標準の工程をまとめて追加</button></div>`}
+  ${r.steps.length?`<div class="steps">${r.steps.map((s,i)=>stepHTML(r,s,i,tr[i])).join('')}</div>`:''}
+  ${r.steps.every(x=>['water','malt','dissolve','heat'].includes(x.type))?`<div class="empty-steps"><p>ここから先の工程をひとつずつ追加するか、${STYLES[r.style].name}の標準的な流れをまとめて入れられます。</p><button class="secondary" data-act="tpl">標準の工程をまとめて追加</button></div>`:''}
   <button class="primary" data-act="sheet">＋ 工程を追加</button>`;
 }
 
@@ -342,9 +355,14 @@ function summaryInner(r,tr,lastK,tt){
     <div class="stat"><small>最終液量</small><b>${lastK&&lastK.vol!=null?fv(lastK.vol):'—'}<span style="font-size:.75rem"> L</span></b></div>
     <div class="stat"><small>最終比重</small><b>${lastK&&lastK.sg!=null?fsg(lastK.sg):'—'}</b><em>${lastK&&lastK.sg!=null?plato(lastK.sg).toFixed(1)+' °P':'比重未測定'}</em></div>
     <div class="stat"><small>工程時間の合計</small><b>${tt?Math.floor(tt/60)+':'+String(tt%60).padStart(2,'0'):'—'}</b><em>${r.steps.length} 工程</em></div></div>
-  ${chartSVG(r,tr,pts)}`;
+  ${chartSVG(r,tr,pts)}${gravTable(r,tr)}`;
 }
 
+function gravTable(r,tr){
+  if(!tr.some(x=>x.sg!=null))return '';
+  return `<div class="gtable-wrap"><div class="label">工程ごとの比重</div><table class="gtable"><thead><tr><th></th><th>工程</th><th>液量</th><th>比重</th><th>°P</th></tr></thead><tbody>${r.steps.map((s,i)=>{const t=tr[i],nm=s.type==='custom'?(s.title||'自由工程'):TYPES[s.type].n;
+    return `<tr class="${t.src==='meas'?'r-meas':t.src==='calc'?'r-calc':'r-same'}"><td class="num">${i+1}</td><td>${esc(nm)}</td><td class="num">${t.vol!=null?fv(t.vol)+' L':'—'}</td><td class="num">${fsg(t.sg)}${t.src==='meas'?' <span class="dot">●</span>':''}</td><td class="num">${t.sg!=null?plato(t.sg).toFixed(1):'—'}</td></tr>`}).join('')}</tbody></table></div>`;
+}
 function chartSVG(r,tr,pts){
   if(pts.length<1)return `<p class="hint">工程のどこかに液量と比重の実測値を入れると、澱引き・ボイル・希釈のあとの比重を計算して、ここに推移を表示します。</p>`;
   const N=r.steps.length,W=520,H=130,L=40,R=12,Tp=12,B=26;
@@ -455,11 +473,11 @@ document.addEventListener('click',e=>{
   const prevArmed=armed;armed=null;
   const idx=r?r.steps.findIndex(s=>s.id===id):-1;
   switch(a){
-    case 'new':{const nr={id:uid(),name:'',style:b.dataset.style,updated:Date.now(),steps:[]};db.recipes.push(nr);view={screen:'editor',rid:nr.id};save();break}
+    case 'new':{const st=b.dataset.style,nr={id:uid(),name:'',style:st,updated:Date.now(),steps:['water',st==='extract'?'dissolve':'malt'].map(k=>mkStep(k,st))};db.recipes.push(nr);view={screen:'editor',rid:nr.id};save();break}
     case 'open':view={screen:'editor',rid:id};break;
     case 'home':view={screen:'home',rid:null};sheet=false;break;
     case 'delr':if(prevArmed==='r'+id){db.recipes=db.recipes.filter(x=>x.id!==id);save()}else armed='r'+id;break;
-    case 'tpl':STYLES[r.style].tpl.forEach(k=>{const s=mkStep(k,r.style);s.open=false;r.steps.push(s)});touch();break;
+    case 'tpl':{const have=new Set(r.steps.map(x=>x.type));STYLES[r.style].tpl.filter(k=>!have.has(k)).forEach(k=>{const s=mkStep(k,r.style);s.open=false;r.steps.push(s)});touch();break}
     case 'sheet':sheet=true;break;
     case 'close':sheet=false;break;
     case 'add':{const s=mkStep(b.dataset.type,r.style);r.steps.push(s);sheet=false;touch();render();
