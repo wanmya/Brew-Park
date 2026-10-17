@@ -166,6 +166,13 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .deco{gap:8px}
 .drow{border-top:1px dashed var(--line);padding-top:6px}
 .drow.err{color:var(--danger)}
+.irow{display:flex;flex-direction:column;gap:6px;padding:8px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.irow-top{display:grid;grid-template-columns:minmax(0,1fr) 32px;gap:6px;align-items:center}
+.irow-nums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.irow-nums.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.irow .inp{padding:0 6px}
+.inp.sel select{font-family:var(--f-body);font-size:.92rem;width:100%;text-overflow:ellipsis}
+.stats{grid-template-columns:repeat(3,minmax(0,1fr));row-gap:12px}
 .addrow{align-self:flex-start;background:none;border:1px dashed var(--line);border-radius:8px;padding:5px 12px;font-size:.85rem;color:var(--accent)}
 .meas{border-top:1px dashed var(--line);padding-top:10px;display:flex;flex-direction:column;gap:6px}
 .meas-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
@@ -203,22 +210,43 @@ textarea{width:100%;font:inherit;font-size:.9rem;border:1px solid var(--line);bo
 const KEY='brew-notes-v1';
 const STYLES={
   lauter:{name:'ロイタータン',desc:'マッシュタンで糖化し、ロイタータンで濾過する全粒仕込み',
-    tpl:['water','malt','protein','mash','mashout','boil','cool','trub','aerate','dilute','yeast'],
-    picks:['water','malt','acid','protein','mash','decoction','mashout','boil','cool','trub','aerate','dilute','yeast']},
+    tpl:['water','malt','protein','mash','mashout','boil','cool','trub','dilute','aerate','yeast','ferment1','diacetyl','lagering','bottle'],
+    picks:['water','malt','acid','protein','mash','mashout','boil','cool','trub','aerate','dilute','yeast','ferment1','diacetyl','ferment2','dryhop','crash','lagering','bottle']},
   biab:{name:'BIAB',desc:'モルトを袋に入れ、ひとつの鍋で糖化から煮沸まで行う',
-    tpl:['water','malt','mash','mashout','bag','boil','cool','trub','aerate','dilute','yeast'],
-    picks:['water','malt','acid','protein','mash','mashout','bag','boil','cool','trub','aerate','dilute','yeast']},
+    tpl:['water','malt','mash','mashout','bag','boil','cool','trub','dilute','aerate','yeast','ferment1','bottle'],
+    picks:['water','malt','acid','protein','mash','mashout','bag','boil','cool','trub','aerate','dilute','yeast','ferment1','diacetyl','ferment2','dryhop','crash','lagering','bottle']},
   extract:{name:'DME・モルト缶',desc:'モルトエキスを湯に溶かして作る。糖化なし',
-    tpl:['water','dissolve','boil','cool','dilute','aerate','yeast'],
-    picks:['water','heat','dissolve','boil','cool','trub','dilute','aerate','yeast']}
+    tpl:['water','dissolve','boil','cool','dilute','aerate','yeast','ferment1','bottle'],
+    picks:['water','heat','dissolve','boil','cool','trub','dilute','aerate','yeast','ferment1','diacetyl','ferment2','dryhop','crash','lagering','bottle']}
 };
+/* 材料の選択肢（Sakeland の品ぞろえを参考にした目安値。収率・α酸・発酵度は袋の表示に合わせて書き換えられる） */
+const COOPERS=['86デイズ ピルスナー','ゴールデンクラウンラガー','ファミリーシークレット アンバーエール','ブリュー IPA','ブーツメーカー ペールエール','プリーチャーズ ヘフェウィート','インキーパーズドーター スパークリングエール','オリジナル ラガー','オリジナル ドラフト','オリジナル スタウト','オリジナル ダークエール','メキシカンセルベッサ','オーストラリアンペールエール','ヨーロピアンラガー','カナディアンブロンド','イングリッシュビター','アイリッシュスタウト','オリジナル リアルエール'];
+const MORGANS=['パシフィック ペールエール','フロンティア IPA','ブルーマウンテン ラガー','ゴールデンザーツ ピルスナー','コルテス セルベッサ','ドックサイド スタウト','ゴールデンシェーフ ウィート','ローヤルオーク アンバーエール','オーストラリア ラガー','オーストラリア ゴールド','オーストラリア ブロンド','オーストラリア ドラフト','オーストラリア オールド','オーストラリア ビター','アイアンバーク ダークエール','ストックマンズ ドラフト'];
+const CAT={
+  malt:[['Weyermann',[['wpils','Weyermann ピルスナー',81],['wpale','Weyermann ペールエール',80],['wvienna','Weyermann ウィーン',80],['wmun1','Weyermann ミュンヘン I',80],['wmun2','Weyermann ミュンヘン II',79],['wwheat','Weyermann ウィート（小麦）',82],['wcpils','Weyermann カラピルス',75],['wchell','Weyermann カラヘル',76],['wcred','Weyermann カラレッド',75],['wcamber','Weyermann カラアンバー',75],['wcmun2','Weyermann カラミュンヘン II',74],['wcaroma','Weyermann カラアロマ',72],['wchoco','Weyermann チョコレート',65],['wroast','Weyermann ローストバーレイ',60],['wsour','Weyermann サワーモルト（酸性麦芽）',78]]],
+        ['Crisp',[['cpale','Crisp ペールエール（マリスオッター）',81],['clager','Crisp ラガーモルト',80]]]],
+  extract:[['ドライモルト（DME）',[['dmecl','クーパーズ ドライモルト ライト',95],['dmel','ドライモルト ライト',95],['dmexl','ドライモルト エクストラライト',95],['dmem','ドライモルト ミディアム',95],['dmed','ドライモルト ダーク',95],['dmew','ドライモルト ウィート（小麦）',95]]],
+           ['Coopers モルト缶 1.7kg',COOPERS.map((x,i)=>['coo'+i,'Coopers '+x,78,1])],
+           ['Morgans モルト缶 1.7kg',MORGANS.map((x,i)=>['mor'+i,'Morgans '+x,78,1])]],
+  add:[['水質調整',[['lactic','乳酸 (88%)','ml'],['phos','リン酸 (75%)','ml'],['cacl2','塩化カルシウム','g'],['gyp','硫酸カルシウム（石膏）','g'],['mgso4','硫酸マグネシウム','g'],['caco3','炭酸カルシウム','g'],['nahco3','重曹（炭酸水素ナトリウム）','g'],['nacl','食塩','g']]]],
+  hop:[['ペレット',[['amarillo','アマリロ',8.7],['mosaic','モザイク',11.8],['kent','ケント・ゴールディング',6.1],['magnum','マグナム',14],['centennial','センテニアル',10],['columbus','コロンバス',16],['simcoe','シムコー',13],['cascade','カスケード',6.9],['saaz','ザーツ',3.5],['tett','テトナンガー',4.1],['fuggle','ファグル',5.5],['citra','シトラ',12],['nugget','ナゲット',13.6],['hers','ハースブルッカー',2.9],['hallertau','ハラタウ',6.4],['nb','ノーザンブルーワー',10.7]]],
+       ['ルプリンペレット',[['lcascade','カスケード（ルプリン）',14.5],['lcitra','シトラ（ルプリン）',23.7],['lmosaic','モザイク（ルプリン）',13.8]]],
+       ['リーフ',[['ffuggle','ファグル（リーフ）',4.6],['fgold','ゴールディング（リーフ）',4.8],['fnb','ノーザンブルーワー（リーフ）',8.6]]]],
+  yeast:[['Fermentis エール',[['us05','SafAle US-05（アメリカンエール）',80],['s04','SafAle S-04（イングリッシュエール）',78],['k97','SafAle K-97（ケルシュ）',82],['s33','SafAle S-33（ベルギー）',70],['t58','SafBrew T-58（スパイス）',75],['be134','SafAle BE-134（セゾン）',90],['be256','SafAle BE-256（ベルギー）',84],['ha18','SafAle HA-18（高発酵）',98],['la01','SafBrew LA-01（低アルコール）',27]]],
+         ['Fermentis ウィート',[['wb06','SafAle WB-06',86],['w68','SafAle W-68',80],['bw20','SafAle BW-20',80]]],
+         ['Fermentis ラガー',[['w3470','SafLager W-34/70',82],['s23','SafLager S-23',82],['s189','SafLager S-189',82],['e30','SafLager E-30',82]]],
+         ['15g パック',[['p15ale','プレミアムエールイースト',75],['p15lag','プレミアムラガーイースト',78],['eu15','ヨーロピアンラガーイースト',78],['am15','アメリカンエールイースト',78],['en15','イングリッシュエールイースト',75],['wh15','ウィートビアーイースト',75]]]]
+};
+const CATIDX={};
+for(const kind in CAT)CAT[kind].forEach(([g,items])=>items.forEach(it=>{CATIDX[it[0]]={kind,id:it[0],name:it[1],v:it[2],can:it[3]===1}}));
+const findCat=(kind,name)=>{if(!name)return '';const nm=String(name).toLowerCase();const hit=Object.values(CATIDX).find(c=>c.kind===kind&&(c.name.toLowerCase()===nm||c.name.toLowerCase().includes(nm)));return hit?hit.id:'custom'};
+const CATKIND={malt:'malt',dissolve:'extract',water:'add'};
 const fTemp=(l='温度',d)=>({k:'temp',l,u:'℃',d});
 const fTime=(l='時間',d)=>({k:'time',l,u:'分',d});
 const TYPES={
   water:{n:'水質調整',sub:'仕込みに使う水と添加物',fields:[{k:'vol',l:'水量',u:'L'},{k:'ph0',l:'原水のpH',u:'pH',step:'0.01'},{k:'ph',l:'調整後のpH（目標）',u:'pH',step:'0.01'}],
-    list:{k:'adds',kind:'add',ph:'添加物の名前',def:[{name:'乳酸 (88%)',amt:'',unit:'ml'},{name:'塩化カルシウム',amt:'',unit:'g'}]},
-    hint:'添加物の種類と量は、あとで詳しく設定できるようにする予定です'},
-  malt:{n:'モルト投入',sub:'使うモルトと量',list:{k:'malts',kind:'kg',ph:'モルト名',def:[{name:'ピルスナーモルト',amt:'',yld:'80'}]}},
+    list:{k:'adds',kind:'add',def:[{cat:'lactic',name:'乳酸 (88%)',amt:'',unit:'ml'},{cat:'cacl2',name:'塩化カルシウム',amt:'',unit:'g'}]}},
+  malt:{n:'モルト投入',sub:'使うモルトと量',list:{k:'malts',kind:'kg',def:[{cat:'wpils',name:'Weyermann ピルスナー',amt:'',yld:'81'}]}},
   acid:{n:'アシッドレスト',sub:'pHを下げる休止',fields:[fTemp('温度',35),fTime('時間',20)]},
   protein:{n:'プロテインレスト',sub:'タンパク分解の休止',fields:[fTemp('温度',52),fTime('時間',15)]},
   mash:{n:'マッシング',sub:'インフュージョンかデコクション。ここで麦汁の比重を計算',fields:[]},
@@ -226,17 +254,24 @@ const TYPES={
   mashout:{n:'マッシュアウト',sub:'酵素を止める',fields:[fTemp('温度',76),fTime('時間',10)]},
   bag:{n:'バッグ引き上げ',sub:'袋を上げて水を切る',fields:[fTime('水切り時間',10)]},
   heat:{n:'湯沸かし',sub:'エキスを溶かす湯',fields:[{k:'vol',l:'水量',u:'L'},fTemp('温度',70)]},
-  dissolve:{n:'エキス溶解',sub:'DME・モルト缶を溶かす',list:{k:'malts',kind:'kg',ph:'DME / モルト缶',def:[{name:'モルト缶',amt:'1.7',yld:'78'}]}},
-  boil:{n:'ボイル',sub:'煮沸。灰汁で液量が減り、蒸発で比重が上がる',fields:[fTime('時間',60),{k:'aku',l:'灰汁として捨てる量',u:'L'},{k:'evap',l:'蒸発量',u:'L'}]},
+  dissolve:{n:'エキス溶解',sub:'DME・モルト缶を溶かす',list:{k:'malts',kind:'kg',def:[{cat:'coo7',name:'Coopers オリジナル ラガー',amt:'1.7',yld:'78'}]}},
+  boil:{n:'ボイル',sub:'煮沸とホップ投入。ここで IBU を計算',fields:[fTime('時間',60),{k:'aku',l:'灰汁として捨てる量',u:'L'},{k:'evap',l:'蒸発量',u:'L'}]},
   cool:{n:'冷却',sub:'酵母投入温度まで下げる',fields:[fTemp('目標温度',20),fTime('時間',null)]},
   trub:{n:'澱引き',sub:'澱を除いて液量が減る',fields:[{k:'loss',l:'除去量',u:'L'}]},
   aerate:{n:'エアレーション',sub:'酸素を溶かし込む',fields:[fTime('時間',5)]},
   dilute:{n:'希釈',sub:'麦汁に水を加える',fields:[{k:'add',l:'加水量',u:'L'},{k:'target',l:'目標比重',u:'SG',step:'0.001'}]},
-  yeast:{n:'酵母投入',sub:'ピッチング',fields:[{k:'name',l:'酵母',t:'text'},fTemp('投入温度',null)]},
+  yeast:{n:'酵母投入',sub:'ピッチング。発酵度から度数を計算',fields:[]},
+  ferment1:{n:'一次発酵',sub:'主発酵。ここで最終比重と度数を計算',fields:[fTemp('温度',18),{k:'days',l:'日数',u:'日',d:7}]},
+  diacetyl:{n:'ダイアセチルレスト',sub:'温度を上げてオフフレーバーを分解',fields:[fTemp('温度',18),{k:'days',l:'日数',u:'日',d:2}]},
+  ferment2:{n:'二次発酵・熟成',sub:'別容器に移して熟成',fields:[fTemp('温度',15),{k:'days',l:'日数',u:'日',d:7}]},
+  dryhop:{n:'ドライホッピング',sub:'発酵後にホップを漬けて香り付け（IBUにはほぼ影響しない）',fields:[fTemp('温度',null),{k:'days',l:'日数',u:'日',d:4}]},
+  crash:{n:'コールドクラッシュ',sub:'冷やして酵母や澱を沈める',fields:[fTemp('温度',2),{k:'days',l:'日数',u:'日',d:2}]},
+  lagering:{n:'ラガーリング',sub:'低温で長期熟成',fields:[fTemp('温度',2),{k:'days',l:'日数',u:'日',d:28}]},
+  bottle:{n:'瓶詰め・プライミング',sub:'砂糖を加えて瓶内で炭酸を作る',fields:[{k:'sugar',l:'砂糖',u:'g/L',d:6},fTemp('熟成温度',20),{k:'days',l:'日数',u:'日',d:14}]},
   measure:{n:'比重測定',sub:'液量と比重だけ記録',fields:[]},
   custom:{n:'自由工程',sub:'名前を自分で付ける',fields:[fTemp('温度',null),fTime('時間',null)]}
 };
-const DEF={yld:80,eff:72};
+const DEF={yld:80,eff:72,att:75};
 
 let db, view={screen:'home',id:null}, sheet=false, armed=null;
 
@@ -257,7 +292,15 @@ function mkStep(type,style){
   if(t.list)s.list=t.list.def.map(x=>({...x}));
   if(type==='custom')s.title='';
   if(type==='mash')fixMash(s);
+  fixExtra(s);
   return s;
+}
+function fixExtra(s){
+  if(s.list)s.list.forEach(it=>{if(it.cat==null)it.cat=findCat(CATKIND[s.type],it.name)});
+  if(s.type==='boil'){if(!Array.isArray(s.hops))s.hops=[];if(!s.p.hopOut)s.p.hopOut='before'}
+  if(s.type==='dryhop'&&!Array.isArray(s.hops))s.hops=[];
+  if(s.type==='yeast'){if(s.p.cat==null)s.p.cat=s.p.name?findCat('yeast',s.p.name):'w3470';const c=CATIDX[s.p.cat];if(c&&!s.p.name)s.p.name=c.name;if(s.p.atten==null)s.p.atten=c?String(c.v):String(DEF.att);if(s.p.temp==null)s.p.temp='';if(s.p.grams==null)s.p.grams=''}
+  if(s.hops)s.hops.forEach(h=>{if(h.cat==null)h.cat=findCat('hop',h.name)});
 }
 const DEC_DEF=[{target:'64',time:'40'},{target:'72',time:'20'},{target:'76',time:'10'}];
 function fixMash(s){
@@ -267,22 +310,26 @@ function fixMash(s){
   if(!Array.isArray(s.decs))s.decs=DEC_DEF.slice(0,+s.p.decN||1).map(x=>({...x}));
   if(!s.meas)s.meas={vol:'',sg:''};
 }
-function fixSteps(a){return (a||[]).filter(x=>TYPES[x.type]).map(x=>{if(x.type==='mash')fixMash(x);if(!x.meas)x.meas={vol:'',sg:''};return x})}
+function fixSteps(a){return (a||[]).filter(x=>TYPES[x.type]).map(x=>{if(x.type==='mash')fixMash(x);fixExtra(x);if(!x.meas)x.meas={vol:'',sg:''};return x})}
 const copy=o=>JSON.parse(JSON.stringify(o));
 function sample(){
   const r={id:uid(),name:'例：ジャーマンピルス 20L',style:'lauter',updated:Date.now(),steps:[]};
   const add=(type,p={},extra={})=>{const s=mkStep(type);Object.assign(s.p,p);Object.assign(s,extra);s.open=false;r.steps.push(s)};
-  add('water',{vol:'30',ph0:'7.2',ph:'5.5'},{list:[{name:'乳酸 (88%)',amt:'2',unit:'ml'},{name:'塩化カルシウム',amt:'3',unit:'g'}]});
-  add('malt',{},{list:[{name:'ピルスナーモルト',amt:'4.6',yld:'80'},{name:'ミュンヘンモルト',amt:'0.4',yld:'78'}]});
+  add('water',{vol:'30',ph0:'7.2',ph:'5.5'},{list:[{cat:'lactic',name:'乳酸 (88%)',amt:'2',unit:'ml'},{cat:'cacl2',name:'塩化カルシウム',amt:'3',unit:'g'}]});
+  add('malt',{},{list:[{cat:'wpils',name:'Weyermann ピルスナー',amt:'4.6',yld:'81'},{cat:'wmun1',name:'Weyermann ミュンヘン I',amt:'0.4',yld:'80'}]});
   add('protein',{temp:'52',time:'15'});
   add('mash',{eff:'72',wort:'26',mashWater:'16'},{rests:[{temp:'65',time:'60'}]});
   add('mashout',{temp:'76',time:'10'});
-  add('boil',{time:'70',aku:'0.5',evap:'4'});
+  add('boil',{time:'70',aku:'0.5',evap:'4',hopOut:'before'},{hops:[{cat:'hallertau',name:'ハラタウ',alpha:'6.4',g:'30',t:'60'},{cat:'saaz',name:'ザーツ',alpha:'3.5',g:'25',t:'15'},{cat:'saaz',name:'ザーツ',alpha:'3.5',g:'20',t:'0'}]});
   add('cool',{temp:'12',time:'30'});
   add('trub',{loss:'2'});
   add('dilute',{add:'',target:'1.048'});
   add('aerate',{time:'5'});
-  add('yeast',{name:'W-34/70',temp:'12'});
+  add('yeast',{cat:'w3470',name:'SafLager W-34/70',atten:'82',temp:'12',grams:'23'});
+  add('ferment1',{temp:'12',days:'10'});
+  add('diacetyl',{temp:'18',days:'2'});
+  add('lagering',{temp:'2',days:'28'});
+  add('bottle',{sugar:'6',temp:'20',days:'14'});
   return r;
 }
 function startBrew(r){
@@ -315,9 +362,14 @@ const stepName=s=>s.type==='custom'?(s.title||'自由工程'):TYPES[s.type].n;
    ボイル：灰汁で液量が減り（比重は同じ）、蒸発で糖の総量はそのまま濃くなる。澱引きは比重そのまま、加水は薄まる。
    記録モードでは実測値で上書きし、そこから先を計算し直す */
 function solveSG(E,V){let lo=1,hi=1.2;for(let k=0;k<60;k++){const m=(lo+hi)/2;if(V*m*plato(m)/100<E)lo=m;else hi=m}return (lo+hi)/2}
+/* IBU（Tinseth式）：利用率 = 1.65×0.000125^(平均比重−1) × (1−e^(−0.04×煮沸分))/4.15。
+   IBU = 利用率 × α酸(%)/100 × ホップ(g) × 1000 ÷ ボイル後の液量(L)。平均比重はボイル前後の平均。
+   冷却後にホップを取り出す場合は、冷却中も苦味が少し出るとみなし、冷却時間の2割（上限10分）を煮沸時間に足す。
+   加水すると IBU は薄まる。度数 ABV = (OG − FG) × 131.25。FG = 1 + (OG−1)×(1−発酵度)。
+   プライミングの砂糖 1 g/L で約 0.065% 上がる */
 function track(steps,useMeas){
-  let vol=null,sg=null,water=0,kg=0,pot=0;const out=[];
-  for(const s of steps){
+  let vol=null,sg=null,water=0,kg=0,pot=0,ibu=null,att=null,yeastName='',og=null,fermented=false,prime=0,fgMeas=false;const out=[];
+  for(let si=0;si<steps.length;si++){const s=steps[si];
     const before={vol,sg};let changed=false,info=null;
     if(s.type==='water'||s.type==='heat')water+=n(s.p.vol)||0;
     if((s.type==='malt'||s.type==='dissolve')&&s.list)s.list.forEach(it=>{const k=n(it.amt);if(k){kg+=k;pot+=k*(n(it.yld)??DEF.yld)/100}});
@@ -330,22 +382,42 @@ function track(steps,useMeas){
       info={kind:'dissolve',kg,pot,water};
       if(pot>0&&water>0){const P=100*pot/(water+pot);sg=sgFromP(P);vol=(water+pot)/sg;changed=true;Object.assign(info,{E:pot,sg,vol})}
     }
-    if(s.type==='boil'&&vol!=null){
-      const ak=n(s.p.aku),e=n(s.p.evap);
-      if(ak){vol=Math.max(0,vol-ak);changed=true}
-      if(e&&vol>e){if(sg!=null)sg=1+(sg-1)*vol/(vol-e);vol-=e;changed=true}
+    if(s.type==='boil'){
+      const sg0=sg;
+      if(vol!=null){const ak=n(s.p.aku),e=n(s.p.evap);
+        if(ak){vol=Math.max(0,vol-ak);changed=true}
+        if(e&&vol>e){if(sg!=null)sg=1+(sg-1)*vol/(vol-e);vol-=e;changed=true}}
+      const coolS=steps.slice(si+1).find(x=>x.type==='cool');
+      const extra=s.p.hopOut==='after'?Math.min(10,0.2*((coolS&&n(coolS.p.time))??20)):0;
+      const G=sg0!=null&&sg!=null?(sg0+sg)/2:(sg??1.050),V=vol;
+      const rows=[];let tot=0;
+      (s.hops||[]).forEach(h=>{const a=n(h.alpha),g=n(h.g),t=n(h.t)??0;if(a&&g&&V){const u=1.65*Math.pow(0.000125,G-1)*(1-Math.exp(-0.04*(t+extra)))/4.15,v=u*a/100*g*1000/V;tot+=v;rows.push({name:h.name||'ホップ',a,g,t,ibu:v})}});
+      info={kind:'boil',rows,tot,G,V,extra,assumed:sg==null,hopOut:s.p.hopOut};
+      if(rows.length){ibu=tot}
     }
     if(s.type==='trub'){const l=n(s.p.loss);if(l&&vol!=null){vol=Math.max(0,vol-l);changed=true}}
-    if(s.type==='dilute'){const a=n(s.p.add);if(a&&vol!=null){if(sg!=null)sg=1+(sg-1)*vol/(vol+a);vol+=a;changed=true}}
+    if(s.type==='dilute'){const a=n(s.p.add);if(a&&vol!=null){if(sg!=null)sg=1+(sg-1)*vol/(vol+a);if(ibu!=null)ibu*=vol/(vol+a);vol+=a;changed=true}}
+    if(s.type==='yeast'){att=n(s.p.atten)??DEF.att;yeastName=s.p.name||''}
+    if(s.type==='ferment1'&&!fermented&&sg!=null){og=sg;const a=att??DEF.att;sg=1+(og-1)*(1-a/100);fermented=true;changed=true;info={kind:'ferment',og,att:a,assumed:att==null,yeast:yeastName}}
+    if(s.type==='bottle'&&fermented){prime=n(s.p.sugar)||0;info={kind:'bottle',prime}}
     let src=changed?'calc':null;
     if(useMeas){
       const mv=n(s.meas&&s.meas.vol),ms=n(s.meas&&s.meas.sg);
       if(mv!=null){vol=mv;src='meas'}
       if(ms!=null){sg=ms;src='meas'}
       if(s.type==='mash'&&info&&pot>0&&(mv!=null||ms!=null)&&vol!=null&&sg!=null){info.actEff=vol*sg*plato(sg)/100/pot*100;info.actVol=vol;info.actSg=sg;info.volGuessed=mv==null}
+      if(fermented&&ms!=null)fgMeas=true;
     }
-    out.push({before,vol,sg,src,info});
+    const abv=fermented&&og!=null&&sg!=null?(og-sg)*131.25+prime*0.0646:null;
+    if(info&&info.kind==='ferment'){info.fg=sg;info.abv=(og-sg)*131.25;info.meas=src==='meas'}
+    if(info&&info.kind==='bottle'){info.abv=abv;info.base=abv!=null?abv-prime*0.0646:null}
+    out.push({before,vol,sg,src,info,ibu,abv});
   }
+  let m={vol:null,og,fg:null,abv:null,ibu,fgMeas,prime,predicted:!fermented};
+  const last=[...out].reverse().find(x=>x.vol!=null||x.sg!=null);if(last)m.vol=last.vol;
+  if(fermented){m.fg=out[out.length-1].sg;m.abv=out[out.length-1].abv}
+  else{const lsg=[...out].reverse().find(x=>x.sg!=null);if(lsg){m.og=lsg.sg;const a=att??DEF.att;m.fg=1+(m.og-1)*(1-a/100);m.abv=(m.og-m.fg)*131.25}}
+  out.meta=m;
   return out;
 }
 /* デコクション：取り出した分を100℃にして戻し、全体を目標温度にする。
@@ -368,6 +440,7 @@ function stepTime(s,kg){
 }
 function kgBefore(steps,idx){let kg=0;steps.slice(0,idx).forEach(s=>{if((s.type==='malt'||s.type==='dissolve')&&s.list)s.list.forEach(it=>kg+=n(it.amt)||0)});return kg}
 function totalTime(steps){return steps.reduce((a,s,i)=>a+stepTime(s,kgBefore(steps,i)),0)}
+function totalDays(steps){return steps.reduce((a,s)=>a+(n(s.p.days)||0),0)}
 
 function render(){
   const app=document.getElementById('app');
@@ -412,21 +485,23 @@ function stepSummary(s){
     if(s.p.eff)bits.push(`効率 ${s.p.eff}%`);if(s.p.wort)bits.push(`麦汁 ${s.p.wort}L`);
     return bits.join(' · ');
   }
+  if(s.type==='yeast'){if(s.p.name)bits.push(s.p.name);if(s.p.atten)bits.push(`発酵度 ${s.p.atten}%`)}
   (t.fields||[]).forEach(f=>{const v=s.p[f.k];if(v!==''&&v!=null)bits.push(f.t==='text'?v:`${f.l} ${v}${f.u==='SG'||f.u==='pH'?'':f.u}`)});
+  if(s.hops&&s.hops.length)bits.push(s.hops.filter(h=>h.name).map(h=>`${h.name}${h.g?' '+h.g+'g':''}${s.type==='boil'&&h.t!==''?' '+h.t+'分':''}`).join('、'));
   if(s.list){const it=s.list.filter(x=>x.name);if(it.length)bits.push(it.map(x=>x.name+(x.amt?` ${x.amt}${x.unit||'kg'}`:'')).join('、'))}
   return bits.join(' · ')||t.sub;
 }
 
 function editorHTML(){
   const r=cur(),brew=isBrew();
-  const tr=track(r.steps,brew),pt=brew?planRows(r):null;
+  const tr=track(r.steps,brew),pt=brew?planRows(r):null,pm=brew?track(r.plan||[],false).meta:null;
   const onlyDefaults=r.steps.every(x=>['water','malt','dissolve','heat'].includes(x.type));
   return `<div class="topbar"><button class="back" data-act="home" aria-label="ホームに戻る">‹</button>
     <div class="namebox"><input id="rname" type="text" data-f="doc|name" value="${esc(r.name)}" placeholder="${brew?'仕込みの名前':'レシピの名前'}"></div>
     <span class="chip ${brew?'hop':''}">${brew?'仕込み記録':'レシピ'}</span></div>
   ${brew?`<div class="meta"><div class="field"><label for="bdate">仕込み日</label><div class="inp"><input id="bdate" type="date" data-f="doc|date" value="${esc(r.date)}"></div></div><p class="hint">${STYLES[r.style].name}${(()=>{const src=db.recipes.find(x=>x.id===r.rid);return src?` · 元のレシピ「${esc(src.name)}」`:''})()}<br>工程の数値は実際の値に書き換えられます。予定はレシピを始めた時点のものです。</p></div>`
     :`<p class="hint mode-note">${STYLES[r.style].name}のレシピを計画します。仕込む日は下の「このレシピで仕込みを始める」から記録モードに入ります。</p>`}
-  <section class="summary" id="summary">${summaryInner(r,tr,pt)}</section>
+  <section class="summary" id="summary">${summaryInner(r,tr,pt,pm)}</section>
   ${brew?'':`<button class="secondary" data-act="startBrew">このレシピで仕込みを始める</button>`}
   ${r.steps.length?`<div class="steps">${r.steps.map((s,i)=>stepHTML(r,s,i,tr[i],pt&&pt[s.id])).join('')}</div>`:''}
   ${onlyDefaults?`<div class="empty-steps"><p>ここから先の工程をひとつずつ追加するか、${STYLES[r.style].name}の標準的な流れをまとめて入れられます。</p><button class="secondary" data-act="tpl">標準の工程をまとめて追加</button></div>`:''}
@@ -434,19 +509,23 @@ function editorHTML(){
 }
 function planRows(b){const t=track(b.plan||[],false),m={};(b.plan||[]).forEach((s,i)=>m[s.id]=t[i]);return m}
 
-function summaryInner(r,tr,pt){
-  const brew=!!pt,lastK=[...tr].reverse().find(x=>x.vol!=null||x.sg!=null);
-  const tt=totalTime(r.steps),dn=r.steps.filter(s=>s.done).length;
-  const planLast=brew?(()=>{const v=Object.values(pt).reverse().find(x=>x.sg!=null);return v})():null;
-  const third=brew?`<div class="stat"><small>進み具合</small><b>${dn}<span class="sub">/${r.steps.length}</span></b><em>工程が完了</em></div>`
-    :`<div class="stat"><small>工程時間の合計</small><b>${tt?Math.floor(tt/60)+':'+String(tt%60).padStart(2,'0'):'—'}</b><em>${r.steps.length} 工程</em></div>`;
+function summaryInner(r,tr,pt,pm){
+  const brew=!!pt,m=tr.meta;
+  const tt=totalTime(r.steps),td=totalDays(r.steps),dn=r.steps.filter(s=>s.done).length;
   const series=[];
   if(brew)series.push({pts:r.steps.map((s,i)=>({i,sg:pt[s.id]?pt[s.id].sg:null,src:'plan'})).filter(x=>x.sg!=null),plan:true});
   series.push({pts:tr.map((x,i)=>({i,sg:x.sg,src:x.src})).filter(x=>x.sg!=null)});
+  const pl=(v,f)=>brew&&pm&&pm[v]!=null?`予定 ${f(pm[v])}`:'';
+  const tile=(l,v,e)=>`<div class="stat"><small>${l}</small><b>${v}</b><em>${e||'&nbsp;'}</em></div>`;
   return `<div class="stats">
-    <div class="stat"><small>${brew?'最終液量':'予定の最終液量'}</small><b>${lastK&&lastK.vol!=null?fv(lastK.vol):'—'}<span class="sub"> L</span></b></div>
-    <div class="stat"><small>${brew?'最終比重':'予定の最終比重'}</small><b>${lastK&&lastK.sg!=null?fsg(lastK.sg):'—'}</b><em>${lastK&&lastK.sg!=null?plato(lastK.sg).toFixed(1)+' °P':'未計算'}${brew&&planLast&&lastK&&lastK.sg!=null?` · 予定 ${fsg(planLast.sg)}`:''}</em></div>
-    ${third}</div>
+    ${tile(brew?'最終液量':'予定の最終液量',`${m.vol!=null?fv(m.vol):'—'}<span class="sub"> L</span>`,pl('vol',v=>fv(v)+' L'))}
+    ${tile('OG（仕込み終了時）',fsg(m.og),m.og!=null?plato(m.og).toFixed(1)+' °P':'')}
+    ${tile(m.fgMeas?'FG（実測）':'FG（予想）',fsg(m.fg),pl('fg',fsg)||(m.fg!=null?plato(m.fg).toFixed(1)+' °P':''))}
+    ${tile('アルコール度数',m.abv!=null?m.abv.toFixed(1)+'<span class="sub"> %</span>':'—',pl('abv',v=>v.toFixed(1)+'%')||(m.prime?'プライミング込み':m.predicted&&m.abv!=null?'発酵度から予想':''))}
+    ${tile('苦味',m.ibu!=null?Math.round(m.ibu)+'<span class="sub"> IBU</span>':'—',pl('ibu',v=>Math.round(v)+' IBU'))}
+    ${brew?tile('進み具合',`${dn}<span class="sub">/${r.steps.length}</span>`,'工程が完了')
+      :tile('仕込み日の作業',tt?Math.floor(tt/60)+':'+String(tt%60).padStart(2,'0'):'—',td?`発酵・熟成 ${td} 日`:`${r.steps.length} 工程`)}
+  </div>
   ${chartSVG(r.steps.length,series,brew)}${gravTable(r,tr,pt)}`;
 }
 
@@ -496,10 +575,13 @@ function stepHTML(r,s,i,t,p){
     if(s.type==='custom')h+=`<div class="field"><label for="${s.id}-title">工程名</label><div class="inp"><input id="${s.id}-title" type="text" data-f="${s.id}|title" value="${esc(s.title)}" placeholder="例：ホップスタンド"></div></div>`;
     if(ty.fields&&ty.fields.length)h+=`<div class="fields">${ty.fields.map(f=>inputHTML(s.id,'p',f,s.p[f.k])).join('')}</div>`;
     if(s.type==='mash')h+=mashBody(s,t);
+    if(s.type==='yeast')h+=yeastBody(s);
     if(ty.list)h+=listHTML(s,ty.list);
+    if(s.hops)h+=hopsHTML(s);
     if(ty.hint)h+=`<p class="hint">${ty.hint}</p>`;
     if(s.type==='dilute')h+=`<div id="help-${s.id}">${diluteHelp(s,t)}</div>`;
-    if(s.type==='mash'||s.type==='dissolve')h+=`<div id="info-${s.id}">${calcInfo(t)}</div>`;
+    if(['mash','dissolve','boil','ferment1','bottle'].includes(s.type))h+=`<div id="info-${s.id}">${calcInfo(t)}</div>`;
+    if(s.type==='cool'){const bo=r.steps.slice(0,i).reverse().find(x=>x.type==='boil');if(bo&&bo.hops&&bo.hops.length)h+=`<p class="hint">ホップは${bo.p.hopOut==='after'?'この冷却の<b>後</b>':'この冷却の<b>前</b>'}に取り出す設定です（ボイルの工程で変更できます）。</p>`}
     if(brew)h+=`<div class="meas"><div class="meas-head"><span class="label">${s.type==='water'?'調整後の実測':'この工程後の実測'}</span><span class="hint">わかる時だけ</span></div>
       <div class="fields">${s.type==='water'?inputHTML(s.id,'meas',{k:'ph',l:'pH',u:'pH',step:'0.01'},s.meas.ph||''):inputHTML(s.id,'meas',{k:'vol',l:'液量',u:'L'},s.meas.vol)+inputHTML(s.id,'meas',{k:'sg',l:'比重',u:'SG',step:'0.001'},s.meas.sg)}</div></div>`;
     h+=`<textarea id="${s.id}-memo" data-f="${s.id}|memo" rows="1" placeholder="メモ">${esc(s.memo)}</textarea></div>`;
@@ -550,6 +632,17 @@ function afterHTML(t,p,brew){
 }
 function calcInfo(t){
   const i=t.info;if(!i)return '';
+  if(i.kind==='boil'){
+    if(!i.rows.length)return `<p class="hint">ホップを選び、量と煮沸時間を入れると IBU を計算します。</p>`;
+    return `<div class="calc"><div>${i.rows.map(r=>`${esc(r.name)} <span class="num">${r.g} g・α${r.a}%・${r.t}分</span> → <b class="num">${r.ibu.toFixed(1)}</b>`).join('<br>')}</div><div class="calc-res">→ 合計 <b class="num">${Math.round(i.tot)} IBU</b></div><div class="muted">ボイル後 <span class="num">${fv(i.V)} L</span>・平均比重 <span class="num">${fsg(i.G)}</span>${i.assumed?'（比重がわからないため1.050と仮定）':''}で計算。${i.extra?`冷却後に取り出すので、冷却中に出る苦味として各ホップに約 ${i.extra.toFixed(0)} 分を足しています。`:''}</div></div>`;
+  }
+  if(i.kind==='ferment'){
+    return `<div class="calc"><div>OG <span class="num">${fsg(i.og)}</span> × 発酵度 <span class="num">${i.att}%</span>${i.yeast?`（${esc(i.yeast)}）`:''}${i.assumed?'（酵母投入の工程がないため75%と仮定）':''}</div><div class="calc-res">→ FG <b class="num">${fsg(i.fg)}</b>${i.meas?'（実測）':''} → 度数 <b class="num">${i.abv.toFixed(1)}%</b></div></div>`;
+  }
+  if(i.kind==='bottle'){
+    if(i.abv==null)return '';
+    return `<div class="calc"><div>発酵後 <span class="num">${i.base.toFixed(1)}%</span> ＋ 砂糖 <span class="num">${i.prime} g/L</span> で約 <span class="num">${(i.prime*0.0646).toFixed(2)}%</span></div><div class="calc-res">→ 最終の度数 <b class="num">${i.abv.toFixed(1)}%</b></div></div>`;
+  }
   if(i.kind==='dissolve'){
     if(!i.kg)return `<p class="hint">エキスの量を入れると、溶解後の比重を計算します。</p>`;
     if(!i.water)return `<p class="hint">この工程より前の「水質調整」か「湯沸かし」に水量を入れると、比重を計算します。</p>`;
@@ -569,17 +662,38 @@ function diluteHelp(s,t){
   const need=b.vol*((b.sg-1)/(tg-1)-1);
   return `<div class="helper"><span>加水前 <span class="num">${fv(b.vol)} L / ${fsg(b.sg)}</span> → 目標 <span class="num">${fsg(tg)}</span> には <b class="num">${need.toFixed(2)} L</b></span><button data-act="applyDil" data-id="${s.id}" data-v="${need.toFixed(2)}">加水量に入れる</button></div>`;
 }
+const numIn=(base,k,v,ph,lab)=>`<input type="number" inputmode="decimal" step="any" id="${base.replace(/\|/g,'-')}-${k}" aria-label="${lab||k}" data-f="${base}|${k}" value="${esc(v)}" placeholder="${ph??''}">`;
+function catSelect(kind,base,cur){
+  return `<select id="${base.replace(/\|/g,'-')}-cat" aria-label="材料を選ぶ" data-f="${base}|cat"><option value="" ${!cur?'selected':''}>選んでください</option>${CAT[kind].map(([g,items])=>`<optgroup label="${g}">${items.map(it=>`<option value="${it[0]}" ${cur===it[0]?'selected':''}>${it[1]}</option>`).join('')}</optgroup>`).join('')}<option value="custom" ${cur==='custom'?'selected':''}>その他（自分で入力）</option></select>`;
+}
+function itemRow(s,grp,j,it,kind){
+  const base=`${s.id}|${grp}|${j}`,custom=it.cat==='custom';
+  let nums;
+  if(kind==='add')nums=`<div class="irow-nums two"><div class="inp">${numIn(base,'amt',it.amt,'','量')}</div><div class="inp"><select id="${base.replace(/\|/g,'-')}-unit" aria-label="単位" data-f="${base}|unit">${['g','ml','mg/L'].map(u=>`<option ${it.unit===u?'selected':''}>${u}</option>`).join('')}</select></div></div>`;
+  else if(kind==='hop')nums=`<div class="irow-nums ${s.type==='boil'?'':'two'}"><div class="inp">${numIn(base,'alpha',it.alpha,'','α酸')}<u>% α</u></div><div class="inp">${numIn(base,'g',it.g,'','量')}<u>g</u></div>${s.type==='boil'?`<div class="inp">${numIn(base,'t',it.t,'','煮沸時間')}<u>分</u></div>`:''}</div>`;
+  else nums=`<div class="irow-nums two"><div class="inp">${numIn(base,'amt',it.amt,'','量')}<u>kg</u></div><div class="inp">${numIn(base,'yld',it.yld,DEF.yld,'収率')}<u>% 収率</u></div></div>`;
+  return `<div class="irow"><div class="irow-top"><div class="inp sel">${catSelect(kind,base,it.cat)}</div><button class="icon" data-act="delItem" data-g="${grp}" data-id="${s.id}" data-j="${j}" aria-label="行を削除">✕</button></div>
+    ${custom?`<div class="inp"><input type="text" id="${base.replace(/\|/g,'-')}-name" aria-label="名前" data-f="${base}|name" value="${esc(it.name)}" placeholder="名前を入力"></div>`:''}${nums}</div>`;
+}
 function listHTML(s,L){
-  const isAdd=L.kind==='add';
-  const head=isAdd?'':`<div class="lrow three lhead"><span>名前</span><span>量</span><span>収率</span><span></span></div>`;
-  return `<div class="listed"><span class="label">${isAdd?'添加物':'投入するもの'}</span>${head}${s.list.map((it,j)=>`<div class="lrow ${isAdd?'':'three'}">
-    <div class="inp"><input type="text" id="${s.id}-l${j}-name" aria-label="名前" data-f="${s.id}|list|${j}|name" value="${esc(it.name)}" placeholder="${L.ph}"></div>
-    <div class="inp"><input type="number" inputmode="decimal" step="any" id="${s.id}-l${j}-amt" aria-label="量" data-f="${s.id}|list|${j}|amt" value="${esc(it.amt)}">${isAdd?'':'<u>kg</u>'}</div>
-    ${isAdd?`<div class="inp"><select id="${s.id}-l${j}-unit" aria-label="単位" data-f="${s.id}|list|${j}|unit">${['g','ml','mg/L'].map(u=>`<option ${it.unit===u?'selected':''}>${u}</option>`).join('')}</select></div>`
-      :`<div class="inp"><input type="number" inputmode="decimal" step="any" id="${s.id}-l${j}-yld" aria-label="収率" data-f="${s.id}|list|${j}|yld" value="${esc(it.yld)}" placeholder="${DEF.yld}"><u>%</u></div>`}
-    <button class="icon" data-act="delItem" data-id="${s.id}" data-j="${j}" aria-label="行を削除">✕</button></div>`).join('')}
-    ${isAdd?'':`<p class="hint">収率はモルト1kgから取れるエキスの割合。ベースモルトは約80%、DMEは約95%、モルト缶は約78%。</p>`}
-    <button class="addrow" data-act="addItem" data-id="${s.id}">＋ 行を追加</button></div>`;
+  const kind=CATKIND[s.type];
+  const hint=kind==='malt'?'収率はモルト1kgから取れるエキスの割合。選ぶと目安値が入ります。':kind==='extract'?'モルト缶にはもともとホップの苦味が入っています。ボイルの IBU は、追加したホップの分だけです。':'';
+  return `<div class="listed"><span class="label">${kind==='add'?'添加物':'投入するもの'}</span>${s.list.map((it,j)=>itemRow(s,'list',j,it,kind)).join('')}
+    ${hint?`<p class="hint">${hint}</p>`:''}<button class="addrow" data-act="addItem" data-g="list" data-id="${s.id}">＋ 行を追加</button></div>`;
+}
+function hopsHTML(s){
+  const boil=s.type==='boil';
+  return `<div class="listed"><span class="label">ホップ</span>${s.hops.map((h,j)=>itemRow(s,'hops',j,h,'hop')).join('')}
+    ${boil?'<p class="hint">分は「ボイル終了までの残り時間」です。60分＝最初に投入、0分＝火を止めるときに投入。α酸は選ぶと目安値が入るので、袋の表示に合わせて直してください。</p>':''}
+    <button class="addrow" data-act="addItem" data-g="hops" data-id="${s.id}">＋ ホップを追加</button>
+    ${boil?`<span class="label">ホップを取り出すタイミング</span>${seg(s.id,'hopOut',s.p.hopOut,[['before','冷却の前'],['after','冷却の後']])}`:''}</div>`;
+}
+function yeastBody(s){
+  const custom=s.p.cat==='custom';
+  return `<div class="field"><label for="${s.id}-ycat">酵母</label><div class="inp sel">${catSelect('yeast',s.id+'|y',s.p.cat).replace(`data-f="${s.id}|y|cat"`,`data-f="${s.id}|ycat"`)}</div></div>
+    ${custom?`<div class="inp"><input type="text" id="${s.id}-yname" aria-label="酵母の名前" data-f="${s.id}|p|name" value="${esc(s.p.name)}" placeholder="酵母の名前"></div>`:''}
+    <div class="fields">${inputHTML(s.id,'p',{k:'atten',l:'発酵度（見かけ）',u:'%'},s.p.atten)}${inputHTML(s.id,'p',{k:'temp',l:'投入温度',u:'℃'},s.p.temp)}${inputHTML(s.id,'p',{k:'grams',l:'投入量',u:'g'},s.p.grams)}</div>
+    <p class="hint">発酵度は、糖のうち酵母が食べる割合です。選ぶとメーカー公表値の中ほどが入ります。一次発酵で、これを使って最終比重と度数を計算します。</p>`;
 }
 
 function sheetHTML(){
@@ -594,8 +708,8 @@ function sheetHTML(){
 }
 
 function refreshComputed(){
-  const r=cur();if(!r)return;const brew=isBrew(),tr=track(r.steps,brew),pt=brew?planRows(r):null;
-  document.getElementById('summary').innerHTML=summaryInner(r,tr,pt);
+  const r=cur();if(!r)return;const brew=isBrew(),tr=track(r.steps,brew),pt=brew?planRows(r):null,pm=brew?track(r.plan||[],false).meta:null;
+  document.getElementById('summary').innerHTML=summaryInner(r,tr,pt,pm);
   r.steps.forEach((s,i)=>{const a=document.getElementById('after-'+s.id);if(a)a.innerHTML=afterHTML(tr[i],pt&&pt[s.id],brew);
     const h=document.getElementById('help-'+s.id);if(h)h.innerHTML=diluteHelp(s,tr[i]);
     const c=document.getElementById('info-'+s.id);if(c)c.innerHTML=calcInfo(tr[i])});
@@ -609,7 +723,14 @@ function onInput(e){
   const s=r.steps.find(x=>x.id===parts[0]);if(!s)return;
   if(parts[1]==='p')s.p[parts[2]]=el.value;
   else if(parts[1]==='meas')s.meas[parts[2]]=el.value;
+  else if((parts[1]==='list'||parts[1]==='hops')&&parts[3]==='cat'){
+    const it=(parts[1]==='hops'?s.hops:s.list)[+parts[2]],c=CATIDX[el.value];it.cat=el.value;
+    if(c){it.name=c.name;if(c.kind==='hop')it.alpha=String(c.v);else if(c.kind==='add')it.unit=c.v;else{it.yld=String(c.v);if(c.can&&!it.amt)it.amt='1.7'}}
+    else if(el.value==='custom')it.name=it.name||'';
+    touch();render();return}
+  else if(parts[1]==='ycat'){const c=CATIDX[el.value];s.p.cat=el.value;if(c){s.p.name=c.name;s.p.atten=String(c.v)}touch();render();return}
   else if(parts[1]==='list')s.list[+parts[2]][parts[3]]=el.value;
+  else if(parts[1]==='hops')s.hops[+parts[2]][parts[3]]=el.value;
   else if(parts[1]==='rest')s.rests[+parts[2]][parts[3]]=el.value;
   else if(parts[1]==='dec')s.decs[+parts[2]][parts[3]]=el.value;
   else if(parts[1]==='decN'){const k=+el.value;while(s.decs.length<k)s.decs.push({...DEC_DEF[s.decs.length]});s.decs.length=k;s.p.decN=String(k);touch();render();return}
@@ -643,8 +764,8 @@ document.addEventListener('click',e=>{
     case 'up':if(idx>0){[r.steps[idx-1],r.steps[idx]]=[r.steps[idx],r.steps[idx-1]];touch()}break;
     case 'down':if(idx<r.steps.length-1){[r.steps[idx+1],r.steps[idx]]=[r.steps[idx],r.steps[idx+1]];touch()}break;
     case 'dels':if(prevArmed===id){r.steps.splice(idx,1);touch()}else armed=id;break;
-    case 'addItem':{const s=r.steps[idx];s.list.push(TYPES[s.type].list.kind==='add'?{name:'',amt:'',unit:'g'}:{name:'',amt:'',yld:''});touch();break}
-    case 'delItem':r.steps[idx].list.splice(+b.dataset.j,1);touch();break;
+    case 'addItem':{const s=r.steps[idx];if(b.dataset.g==='hops')s.hops.push({cat:'',name:'',alpha:'',g:'',t:s.type==='boil'?'0':''});else s.list.push(CATKIND[s.type]==='add'?{cat:'',name:'',amt:'',unit:'g'}:{cat:'',name:'',amt:'',yld:''});touch();break}
+    case 'delItem':(b.dataset.g==='hops'?r.steps[idx].hops:r.steps[idx].list).splice(+b.dataset.j,1);touch();break;
     case 'seg':r.steps[idx].p[b.dataset.k]=b.dataset.v;touch();break;
     case 'addRest':{const rs=r.steps[idx].rests,l=rs[rs.length-1];rs.push({temp:l?String((n(l.temp)||60)+6):'66',time:'20'});touch();break}
     case 'delRest':r.steps[idx].rests.splice(+b.dataset.j,1);touch();break;
