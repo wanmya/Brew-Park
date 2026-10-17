@@ -1,8 +1,8 @@
 // ビール仕込みノート service worker
 // 更新時はこの番号を上げる（上げ忘れても、ページ本体はネット優先なので最新が届きます）
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE = 'brew-notes-' + VERSION;
-const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png'];
+const SHELL = ['./', './index.html', './manifest.webmanifest', './bp-icon-192.png', './bp-icon-512.png', './bp-icon-maskable-512.png', './bp-apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
