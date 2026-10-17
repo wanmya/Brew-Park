@@ -97,12 +97,18 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 
 .steps{display:flex;flex-direction:column;gap:10px}
 .step{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
-.step-head{display:flex;align-items:center;gap:8px;padding:10px 10px 10px 12px}
+.step-head{display:flex;align-items:center;gap:6px;padding:8px 10px 8px 10px}
 .step-no{font-family:var(--f-num);font-weight:600;font-size:.8rem;color:var(--accent-ink);background:var(--accent);border-radius:6px;min-width:26px;height:26px;display:grid;place-items:center;flex:none}
-.step-title{flex:1;min-width:0;text-align:left;background:none;border:0;padding:0}
-.step-title b{display:block;font-size:1rem}
-.step-title span{display:block;font-size:.8rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.step-title input{width:100%;font:inherit;font-weight:700;border:0;border-bottom:1px dashed var(--line);background:none;color:var(--ink);padding:0}
+.step-title{flex:1;min-width:0;text-align:left;background:none;border:0;padding:4px 0;display:flex;align-items:center;gap:8px}
+.chev{width:16px;height:16px;flex:none;color:var(--muted);transition:transform .15s ease}
+.is-open .chev{transform:rotate(90deg);color:var(--accent)}
+.tt{flex:1;min-width:0;display:flex;flex-direction:column}
+.tt b{font-size:1rem}
+.tt span{font-size:.8rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.icon.check{color:var(--muted)}
+.icon.check.on{background:var(--hop);border-color:var(--hop);color:var(--surface)}
+.is-done .step-no{background:var(--hop)}
+.is-done .tt b{color:var(--muted)}
 .icons{display:flex;gap:4px;flex:none}
 .icon{width:32px;height:32px;border-radius:8px;border:1px solid var(--line);background:var(--sunk);font-size:.9rem;display:grid;place-items:center;padding:0}
 .icon:disabled{opacity:.35;cursor:default}
@@ -138,6 +144,20 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .gtable tr.r-calc td:nth-child(4){color:var(--accent);font-weight:600}
 .gtable tr.r-meas td:nth-child(4){color:var(--hop);font-weight:600}
 .gtable .dot{font-size:.6rem}
+.hsec{display:flex;flex-direction:column;gap:8px}
+.sub{font-size:.75rem}
+.meta{display:grid;grid-template-columns:150px 1fr;gap:12px;align-items:end}
+.meta input[type=date]{font-family:var(--f-num);font-size:.95rem}
+@media (max-width:380px){.meta{grid-template-columns:1fr}}
+.mode-note{margin-top:-6px}
+.legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:.75rem;color:var(--muted);align-items:center}
+.lg-plan{display:inline-block;width:18px;border-top:2px dashed var(--muted);vertical-align:middle}
+.act{border-top:1px dashed var(--line);padding-top:6px;margin-top:2px}
+.plan-v{margin-left:auto}
+.gtable td.plan{color:var(--muted)!important;font-weight:400!important}
+.gtable.is-brew tr.r-calc td:nth-child(5){color:var(--accent);font-weight:600}
+.gtable.is-brew tr.r-meas td:nth-child(5){color:var(--hop);font-weight:600}
+.gtable .ok{color:var(--hop);font-size:.75rem}
 .addrow{align-self:flex-start;background:none;border:1px dashed var(--line);border-radius:8px;padding:5px 12px;font-size:.85rem;color:var(--accent)}
 .meas{border-top:1px dashed var(--line);padding-top:10px;display:flex;flex-direction:column;gap:6px}
 .meas-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
@@ -184,17 +204,16 @@ const STYLES={
     tpl:['water','dissolve','boil','cool','dilute','aerate','yeast'],
     picks:['water','heat','dissolve','boil','cool','trub','dilute','aerate','yeast']}
 };
-const T='temp',M='time';
 const fTemp=(l='温度',d)=>({k:'temp',l,u:'℃',d});
 const fTime=(l='時間',d)=>({k:'time',l,u:'分',d});
 const TYPES={
-  water:{n:'水質調整',sub:'仕込みに使う水と添加物',fields:[{k:'vol',l:'水量（マッシング＋スパージングの合計）',u:'L'}],
+  water:{n:'水質調整',sub:'仕込みに使う水と添加物',fields:[{k:'vol',l:'水量',u:'L'}],
     list:{k:'adds',kind:'add',ph:'添加物の名前',def:[{name:'乳酸 (88%)',amt:'',unit:'ml'},{name:'塩化カルシウム',amt:'',unit:'g'}]},
     hint:'添加物の種類と量は、あとで詳しく設定できるようにする予定です'},
   malt:{n:'モルト投入',sub:'使うモルトと量',list:{k:'malts',kind:'kg',ph:'モルト名',def:[{name:'ピルスナーモルト',amt:'',yld:'80'}]}},
   acid:{n:'アシッドレスト',sub:'pHを下げる休止',fields:[fTemp('温度',35),fTime('時間',20)]},
   protein:{n:'プロテインレスト',sub:'タンパク分解の休止',fields:[fTemp('温度',52),fTime('時間',15)]},
-  mash:{n:'マッシング',sub:'糖化。スパージング後の比重を計算',fields:[fTemp('温度',66),fTime('時間',60),{k:'eff',l:'糖化効率',u:'%',d:72},{k:'abs',l:'モルト吸水量',u:'L/kg',d:1}]},
+  mash:{n:'マッシング',sub:'糖化。ここで麦汁の比重を計算',fields:[fTemp('温度',66),fTime('時間',60),{k:'eff',l:'糖化効率',u:'%',d:72},{k:'wort',l:'得る麦汁量',u:'L'}]},
   decoction:{n:'デコクション',sub:'一部を煮出して戻す',fields:[{k:'pull',l:'取り出し量',u:'L'},fTemp('目標温度',72),fTime('煮沸時間',15)]},
   mashout:{n:'マッシュアウト',sub:'酵素を止める',fields:[fTemp('温度',76),fTime('時間',10)]},
   bag:{n:'バッグ引き上げ',sub:'袋を上げて水を切る',fields:[fTime('水切り時間',10)]},
@@ -209,34 +228,38 @@ const TYPES={
   measure:{n:'比重測定',sub:'液量と比重だけ記録',fields:[]},
   custom:{n:'自由工程',sub:'名前を自分で付ける',fields:[fTemp('温度',null),fTime('時間',null)]}
 };
-const OTHER=['measure','custom'];
+const DEF={yld:80,eff:72};
 
-let db=load(), view={screen:'home',rid:null}, sheet=false, armed=null;
+let db, view={screen:'home',id:null}, sheet=false, armed=null;
 
 function uid(){return Math.random().toString(36).slice(2,9)}
 function load(){
-  try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&Array.isArray(s.recipes)){s.recipes.forEach(r=>{r.steps=r.steps.filter(x=>TYPES[x.type])});return s}}catch(e){}
-  return {recipes:[sample()]};
+  try{const s=JSON.parse(localStorage.getItem(KEY));
+    if(s&&Array.isArray(s.recipes)){s.brews=Array.isArray(s.brews)?s.brews:[];
+      s.recipes.forEach(r=>{r.steps=r.steps.filter(x=>TYPES[x.type])});
+      s.brews.forEach(b=>{b.steps=b.steps.filter(x=>TYPES[x.type]);b.plan=(b.plan||[]).filter(x=>TYPES[x.type])});
+      return s}}catch(e){}
+  const r=sample();return {recipes:[r],brews:[sampleBrew(r)]};
 }
 function save(){try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){}}
 function mkStep(type,style){
   const t=TYPES[type],p={};
   (t.fields||[]).forEach(f=>{p[f.k]=f.d==null?'':String(f.d)});
-  const s={id:uid(),type,p,meas:{vol:'',sg:''},memo:'',open:true};
+  const s={id:uid(),type,p,meas:{vol:'',sg:''},done:false,memo:'',open:true};
   if(t.list)s.list=t.list.def.map(x=>({...x}));
   if(type==='custom')s.title='';
-  if(type==='mash'&&style==='biab')s.p.abs='0.6';
   return s;
 }
+const copy=o=>JSON.parse(JSON.stringify(o));
 function sample(){
   const r={id:uid(),name:'例：ジャーマンピルス 20L',style:'lauter',updated:Date.now(),steps:[]};
-  const add=(type,p={},meas={},extra={})=>{const s=mkStep(type);Object.assign(s.p,p);Object.assign(s.meas,meas);Object.assign(s,extra);s.open=false;r.steps.push(s)};
-  add('water',{vol:'29'},{}, {list:[{name:'乳酸 (88%)',amt:'2',unit:'ml'},{name:'塩化カルシウム',amt:'3',unit:'g'}]});
-  add('malt',{},{}, {list:[{name:'ピルスナーモルト',amt:'4.6',yld:'80'},{name:'ミュンヘンモルト',amt:'0.4',yld:'78'}]});
+  const add=(type,p={},extra={})=>{const s=mkStep(type);Object.assign(s.p,p);Object.assign(s,extra);s.open=false;r.steps.push(s)};
+  add('water',{vol:'30'},{list:[{name:'乳酸 (88%)',amt:'2',unit:'ml'},{name:'塩化カルシウム',amt:'3',unit:'g'}]});
+  add('malt',{},{list:[{name:'ピルスナーモルト',amt:'4.6',yld:'80'},{name:'ミュンヘンモルト',amt:'0.4',yld:'78'}]});
   add('protein',{temp:'52',time:'15'});
-  add('mash',{temp:'65',time:'60',eff:'75',abs:'1'});
+  add('mash',{temp:'65',time:'60',eff:'72',wort:'26'});
   add('mashout',{temp:'76',time:'10'});
-  add('boil',{time:'70',aku:'0.5',evap:'4'},{sg:'1.052'});
+  add('boil',{time:'70',aku:'0.5',evap:'4'});
   add('cool',{temp:'12',time:'30'});
   add('trub',{loss:'2'});
   add('dilute',{add:'',target:'1.048'});
@@ -244,35 +267,50 @@ function sample(){
   add('yeast',{name:'W-34/70',temp:'12'});
   return r;
 }
-const cur=()=>db.recipes.find(r=>r.id===view.rid);
+function startBrew(r){
+  const plan=copy(r.steps),steps=copy(r.steps).map(s=>({...s,meas:{vol:'',sg:''},done:false,open:false}));
+  const d=new Date(),date=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  return {id:uid(),rid:r.id,name:r.name.replace(/^例：/,'')||'無題の仕込み',style:r.style,date,updated:Date.now(),plan,steps};
+}
+function sampleBrew(r){
+  const b=startBrew(r);b.name='例：ジャーマンピルス 1回目';
+  const by=t=>b.steps.find(s=>s.type===t);
+  by('mash').meas={vol:'25.0',sg:'1.044'};by('boil').meas={vol:'',sg:'1.052'};
+  b.steps.slice(0,7).forEach(s=>s.done=true);
+  return b;
+}
+
+const isBrew=()=>view.screen==='brew';
+const cur=()=>isBrew()?db.brews.find(b=>b.id===view.id):db.recipes.find(r=>r.id===view.id);
 const n=v=>{const x=parseFloat(v);return isFinite(x)?x:null};
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fv=v=>v==null?'—':v.toFixed(1);
 const fsg=v=>v==null?'—':v.toFixed(3);
 const plato=sg=>-616.868+1111.14*sg-630.272*sg*sg+135.997*sg*sg*sg;
+const sgFromP=P=>1+P/(258.6-(P/258.2)*227.1);
+const stepName=s=>s.type==='custom'?(s.title||'自由工程'):TYPES[s.type].n;
 
 /* 比重・液量の追跡
-   マッシング：糖化効率は、マッシングからスパージング完了までで麦汁に取り出せるエキスの割合。
-   取り出せるエキス(kg) = Σ モルト量 × 収率 × 糖化効率。仕込み水の合計からモルトの吸水を引いた水に溶けているとして、
-   濃度(°P)から比重を出す。これがスパージング完了後（ボイル前）の麦汁。
-   ボイル：灰汁で液量が減り（比重は同じ）、蒸発で糖の総量はそのまま濃くなる。澱引きは比重そのまま、加水は薄まる */
-const DEF={yld:80,eff:72,abs:1};
-const sgFromP=P=>1+P/(258.6-(P/258.2)*227.1);
-function wortOf(E,W){const P=100*E/(W+E),sg=sgFromP(P);return {sg,P,vol:(W+E)/sg}}
-function track(r){
-  let vol=null,sg=null,water=0,kg=0,pot=0,done=false;const out=[];
-  for(const s of r.steps){
+   マッシング：このアプリの糖化効率は「モルトの量から、どれだけの比重の麦汁を何L得られるか」を決める係数。
+   取り出せるエキス(kg) = Σ モルト量 × 収率 × 糖化効率。それが「得る麦汁量」に溶けているとして比重を求める。
+   スパージングの湯量などは途中経過なので計算に使わない。
+   ボイル：灰汁で液量が減り（比重は同じ）、蒸発で糖の総量はそのまま濃くなる。澱引きは比重そのまま、加水は薄まる。
+   記録モードでは実測値で上書きし、そこから先を計算し直す */
+function solveSG(E,V){let lo=1,hi=1.2;for(let k=0;k<60;k++){const m=(lo+hi)/2;if(V*m*plato(m)/100<E)lo=m;else hi=m}return (lo+hi)/2}
+function track(steps,useMeas){
+  let vol=null,sg=null,water=0,kg=0,pot=0;const out=[];
+  for(const s of steps){
     const before={vol,sg};let changed=false,info=null;
     if(s.type==='water'||s.type==='heat')water+=n(s.p.vol)||0;
     if((s.type==='malt'||s.type==='dissolve')&&s.list)s.list.forEach(it=>{const k=n(it.amt);if(k){kg+=k;pot+=k*(n(it.yld)??DEF.yld)/100}});
-    if(s.type==='mash'&&!done){
-      const eff=n(s.p.eff)??DEF.eff,ab=n(s.p.abs)??DEF.abs,absL=ab*kg;
-      info={kind:'mash',kg,pot,water,eff,absL};
-      if(pot>0&&water>absL){const E=pot*eff/100,w=wortOf(E,water-absL);vol=w.vol;sg=w.sg;changed=true;done=true;Object.assign(info,{E,P:w.P,vol,sg})}
+    if(s.type==='mash'){
+      const eff=n(s.p.eff)??DEF.eff,V=n(s.p.wort);
+      info={kind:'mash',kg,pot,eff,V};
+      if(pot>0&&V>0){const E=pot*eff/100;sg=solveSG(E,V);vol=V;changed=true;Object.assign(info,{E,sg})}
     }
     if(s.type==='dissolve'){
       info={kind:'dissolve',kg,pot,water};
-      if(pot>0&&water>0){const w=wortOf(pot,water);vol=w.vol;sg=w.sg;changed=true;done=true;Object.assign(info,{E:pot,P:w.P,vol,sg})}
+      if(pot>0&&water>0){const P=100*pot/(water+pot);sg=sgFromP(P);vol=(water+pot)/sg;changed=true;Object.assign(info,{E:pot,sg,vol})}
     }
     if(s.type==='boil'&&vol!=null){
       const ak=n(s.p.aku),e=n(s.p.evap);
@@ -281,31 +319,25 @@ function track(r){
     }
     if(s.type==='trub'){const l=n(s.p.loss);if(l&&vol!=null){vol=Math.max(0,vol-l);changed=true}}
     if(s.type==='dilute'){const a=n(s.p.add);if(a&&vol!=null){if(sg!=null)sg=1+(sg-1)*vol/(vol+a);vol+=a;changed=true}}
-    const mv=n(s.meas.vol),ms=n(s.meas.sg);
     let src=changed?'calc':null;
-    if(mv!=null){vol=mv;src='meas'}
-    if(ms!=null){sg=ms;src='meas'}
+    if(useMeas){
+      const mv=n(s.meas&&s.meas.vol),ms=n(s.meas&&s.meas.sg);
+      if(mv!=null){vol=mv;src='meas'}
+      if(ms!=null){sg=ms;src='meas'}
+      if(s.type==='mash'&&info&&pot>0&&(mv!=null||ms!=null)&&vol!=null&&sg!=null){info.actEff=vol*sg*plato(sg)/100/pot*100;info.actVol=vol;info.actSg=sg;info.volGuessed=mv==null}
+    }
     out.push({before,vol,sg,src,info});
   }
   return out;
 }
-function calcInfo(s,t){
-  const i=t.info;if(!i)return '';
-  const isMash=i.kind==='mash';
-  if(!i.kg)return `<p class="hint">この工程より前の「${isMash?'モルト投入':'エキス溶解'}」に量を入れると、${isMash?'スパージング完了後':'溶解後'}の比重を計算します。</p>`;
-  if(!i.water||(isMash&&i.water<=i.absL))return `<p class="hint">この工程より前の「水質調整」に、マッシングとスパージングで使う水量の合計を入れると、比重を計算します。</p>`;
-  const lines=isMash
-    ?`モルト <span class="num">${i.kg.toFixed(2)} kg</span>（エキス最大 <span class="num">${i.pot.toFixed(2)} kg</span>）× 糖化効率 <span class="num">${i.eff}%</span> = <b class="num">${i.E.toFixed(2)} kg</b> を取り出す<br>仕込み水の合計 <span class="num">${fv(i.water)} L</span> − モルトの吸水 <span class="num">${fv(i.absL)} L</span>`
-    :`エキス <span class="num">${i.kg.toFixed(2)} kg</span> × 収率 = <b class="num">${i.E.toFixed(2)} kg</b>、水 <span class="num">${fv(i.water)} L</span>`;
-  return `<div class="calc"><div>${lines}</div><div class="calc-res">${isMash?'スパージング完了後の麦汁 ':''}→ <b class="num">${fv(i.vol)} L</b> / <b class="num">SG ${fsg(i.sg)}</b> <span class="num muted">${i.P.toFixed(1)}°P</span></div></div>`;
-}
-function totalTime(r){return r.steps.reduce((a,s)=>a+(n(s.p.time)||0),0)}
+function totalTime(steps){return steps.reduce((a,s)=>a+(n(s.p.time)||0),0)}
 
 function render(){
   const app=document.getElementById('app');
+  if(view.screen!=='home'&&!cur())view={screen:'home',id:null};
   app.innerHTML=view.screen==='home'?homeHTML():editorHTML();
   let sh=document.getElementById('sheet');
-  if(sheet&&view.screen==='editor'){
+  if(sheet&&view.screen!=='home'){
     if(!sh){sh=document.createElement('div');sh.id='sheet';document.body.appendChild(sh)}
     sh.innerHTML=sheetHTML();
   }else if(sh)sh.remove();
@@ -316,17 +348,23 @@ const ICONS={
  biab:'<svg viewBox="0 0 56 56" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 18h40v26a4 4 0 0 1-4 4H12a4 4 0 0 1-4-4z"/><path d="M4 18h48"/><path d="M16 12c0 0 2 22 12 26 10-4 12-26 12-26" stroke-dasharray="2 3"/><path d="M28 4v8"/></svg>',
  extract:'<svg viewBox="0 0 56 56" fill="none" stroke="currentColor" stroke-width="2"><rect x="16" y="10" width="24" height="36" rx="3"/><path d="M16 16h24M16 40h24"/><path d="M23 26h10M23 31h10" opacity=".6"/></svg>'
 };
+const CHEV='<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3l6 5-6 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
+function delBtn(kind,id){const k=kind+id;return `<button class="ghost ${armed===k?'warn':''}" data-act="del" data-kind="${kind}" data-id="${id}">${armed===k?'削除する':'削除'}</button>`}
 function homeHTML(){
   const rs=[...db.recipes].sort((a,b)=>b.updated-a.updated);
-  return `<header class="brand"><h1>ビール仕込みノート</h1><p>醸造方式を選んで、工程を並べていきます。</p></header>
-  <section style="display:flex;flex-direction:column;gap:10px"><div class="label">新しく仕込む</div>
+  const bs=[...db.brews].sort((a,b)=>(b.date||'').localeCompare(a.date||'')||b.updated-a.updated);
+  return `<header class="brand"><h1>ビール仕込みノート</h1><p>レシピを計画し、そのレシピで仕込みながら記録します。</p></header>
+  <section class="hsec"><div class="label">新しいレシピ</div>
   <div class="methods">${Object.entries(STYLES).map(([k,s])=>`<button class="method" data-act="new" data-style="${k}">${ICONS[k]}<div><b>${s.name}</b><span>${s.desc}</span></div><i>›</i></button>`).join('')}</div></section>
-  <section style="display:flex;flex-direction:column;gap:6px"><div class="label">保存した仕込み</div>
-  ${rs.length?`<div class="saved">${rs.map(r=>{const tr=track(r),last=[...tr].reverse().find(x=>x.sg!=null);
-    return `<div class="saved-row"><button class="open" data-act="open" data-id="${r.id}"><b>${esc(r.name||'無題の仕込み')}</b><span><span class="chip">${STYLES[r.style].name}</span> ${r.steps.length}工程${last?` · <span class="num">SG ${fsg(last.sg)}</span>`:''} · ${new Date(r.updated).toLocaleDateString('ja-JP')}</span></button>
-    <button class="ghost ${armed==='r'+r.id?'warn':''}" data-act="delr" data-id="${r.id}">${armed==='r'+r.id?'削除する':'削除'}</button></div>`}).join('')}</div>`
-  :'<p class="empty-note">まだありません。上の方式を選ぶと作成されます。</p>'}</section>`;
+  <section class="hsec"><div class="label">レシピ（計画）</div>
+  ${rs.length?`<div class="saved">${rs.map(r=>{const tr=track(r.steps,false),last=[...tr].reverse().find(x=>x.sg!=null);
+    return `<div class="saved-row"><button class="open" data-act="open" data-kind="r" data-id="${r.id}"><b>${esc(r.name||'無題のレシピ')}</b><span><span class="chip">${STYLES[r.style].name}</span> ${r.steps.length}工程${last?` · <span class="num">予定 SG ${fsg(last.sg)}</span>`:''}</span></button>${delBtn('r',r.id)}</div>`}).join('')}</div>`
+  :'<p class="empty-note">まだありません。上の方式を選ぶと作成されます。</p>'}</section>
+  <section class="hsec"><div class="label">仕込み記録</div>
+  ${bs.length?`<div class="saved">${bs.map(b=>{const tr=track(b.steps,true),last=[...tr].reverse().find(x=>x.sg!=null),dn=b.steps.filter(s=>s.done).length;
+    return `<div class="saved-row"><button class="open" data-act="open" data-kind="b" data-id="${b.id}"><b>${esc(b.name||'無題の仕込み')}</b><span><span class="num">${esc(b.date||'')}</span> · <span class="chip ${dn===b.steps.length&&dn?'hop':'plain'}">${dn===b.steps.length&&dn?'完了':`${dn}/${b.steps.length} 工程`}</span>${last?` · <span class="num">SG ${fsg(last.sg)}</span>`:''}</span></button>${delBtn('b',b.id)}</div>`}).join('')}</div>`
+  :'<p class="empty-note">レシピを開いて「このレシピで仕込みを始める」を押すと、ここに記録ができます。</p>'}</section>`;
 }
 
 function stepSummary(s){
@@ -337,47 +375,66 @@ function stepSummary(s){
 }
 
 function editorHTML(){
-  const r=cur();if(!r){view.screen='home';return homeHTML()}
-  const tr=track(r),lastK=[...tr].reverse().find(x=>x.vol!=null||x.sg!=null);
-  const tt=totalTime(r);
-  return `<div class="topbar"><button class="back" data-act="home" aria-label="戻る">‹</button>
-    <div class="namebox"><input id="rname" type="text" data-f="recipe|name" value="${esc(r.name)}" placeholder="仕込みの名前"></div>
-    <span class="chip">${STYLES[r.style].name}</span></div>
-  <section class="summary" id="summary">${summaryInner(r,tr,lastK,tt)}</section>
-  ${r.steps.length?`<div class="steps">${r.steps.map((s,i)=>stepHTML(r,s,i,tr[i])).join('')}</div>`:''}
-  ${r.steps.every(x=>['water','malt','dissolve','heat'].includes(x.type))?`<div class="empty-steps"><p>ここから先の工程をひとつずつ追加するか、${STYLES[r.style].name}の標準的な流れをまとめて入れられます。</p><button class="secondary" data-act="tpl">標準の工程をまとめて追加</button></div>`:''}
+  const r=cur(),brew=isBrew();
+  const tr=track(r.steps,brew),pt=brew?planRows(r):null;
+  const onlyDefaults=r.steps.every(x=>['water','malt','dissolve','heat'].includes(x.type));
+  return `<div class="topbar"><button class="back" data-act="home" aria-label="ホームに戻る">‹</button>
+    <div class="namebox"><input id="rname" type="text" data-f="doc|name" value="${esc(r.name)}" placeholder="${brew?'仕込みの名前':'レシピの名前'}"></div>
+    <span class="chip ${brew?'hop':''}">${brew?'仕込み記録':'レシピ'}</span></div>
+  ${brew?`<div class="meta"><div class="field"><label for="bdate">仕込み日</label><div class="inp"><input id="bdate" type="date" data-f="doc|date" value="${esc(r.date)}"></div></div><p class="hint">${STYLES[r.style].name}${(()=>{const src=db.recipes.find(x=>x.id===r.rid);return src?` · 元のレシピ「${esc(src.name)}」`:''})()}<br>工程の数値は実際の値に書き換えられます。予定はレシピを始めた時点のものです。</p></div>`
+    :`<p class="hint mode-note">${STYLES[r.style].name}のレシピを計画します。仕込む日は下の「このレシピで仕込みを始める」から記録モードに入ります。</p>`}
+  <section class="summary" id="summary">${summaryInner(r,tr,pt)}</section>
+  ${brew?'':`<button class="secondary" data-act="startBrew">このレシピで仕込みを始める</button>`}
+  ${r.steps.length?`<div class="steps">${r.steps.map((s,i)=>stepHTML(r,s,i,tr[i],pt&&pt[s.id])).join('')}</div>`:''}
+  ${onlyDefaults?`<div class="empty-steps"><p>ここから先の工程をひとつずつ追加するか、${STYLES[r.style].name}の標準的な流れをまとめて入れられます。</p><button class="secondary" data-act="tpl">標準の工程をまとめて追加</button></div>`:''}
   <button class="primary" data-act="sheet">＋ 工程を追加</button>`;
 }
+function planRows(b){const t=track(b.plan||[],false),m={};(b.plan||[]).forEach((s,i)=>m[s.id]=t[i]);return m}
 
-function summaryInner(r,tr,lastK,tt){
-  const pts=tr.map((x,i)=>({i,sg:x.sg,src:x.src})).filter(x=>x.sg!=null);
+function summaryInner(r,tr,pt){
+  const brew=!!pt,lastK=[...tr].reverse().find(x=>x.vol!=null||x.sg!=null);
+  const tt=totalTime(r.steps),dn=r.steps.filter(s=>s.done).length;
+  const planLast=brew?(()=>{const v=Object.values(pt).reverse().find(x=>x.sg!=null);return v})():null;
+  const third=brew?`<div class="stat"><small>進み具合</small><b>${dn}<span class="sub">/${r.steps.length}</span></b><em>工程が完了</em></div>`
+    :`<div class="stat"><small>工程時間の合計</small><b>${tt?Math.floor(tt/60)+':'+String(tt%60).padStart(2,'0'):'—'}</b><em>${r.steps.length} 工程</em></div>`;
+  const series=[];
+  if(brew)series.push({pts:r.steps.map((s,i)=>({i,sg:pt[s.id]?pt[s.id].sg:null,src:'plan'})).filter(x=>x.sg!=null),plan:true});
+  series.push({pts:tr.map((x,i)=>({i,sg:x.sg,src:x.src})).filter(x=>x.sg!=null)});
   return `<div class="stats">
-    <div class="stat"><small>最終液量</small><b>${lastK&&lastK.vol!=null?fv(lastK.vol):'—'}<span style="font-size:.75rem"> L</span></b></div>
-    <div class="stat"><small>最終比重</small><b>${lastK&&lastK.sg!=null?fsg(lastK.sg):'—'}</b><em>${lastK&&lastK.sg!=null?plato(lastK.sg).toFixed(1)+' °P':'比重未測定'}</em></div>
-    <div class="stat"><small>工程時間の合計</small><b>${tt?Math.floor(tt/60)+':'+String(tt%60).padStart(2,'0'):'—'}</b><em>${r.steps.length} 工程</em></div></div>
-  ${chartSVG(r,tr,pts)}${gravTable(r,tr)}`;
+    <div class="stat"><small>${brew?'最終液量':'予定の最終液量'}</small><b>${lastK&&lastK.vol!=null?fv(lastK.vol):'—'}<span class="sub"> L</span></b></div>
+    <div class="stat"><small>${brew?'最終比重':'予定の最終比重'}</small><b>${lastK&&lastK.sg!=null?fsg(lastK.sg):'—'}</b><em>${lastK&&lastK.sg!=null?plato(lastK.sg).toFixed(1)+' °P':'未計算'}${brew&&planLast&&lastK&&lastK.sg!=null?` · 予定 ${fsg(planLast.sg)}`:''}</em></div>
+    ${third}</div>
+  ${chartSVG(r.steps.length,series,brew)}${gravTable(r,tr,pt)}`;
 }
 
-function gravTable(r,tr){
-  if(!tr.some(x=>x.sg!=null))return '';
-  return `<div class="gtable-wrap"><div class="label">工程ごとの比重</div><table class="gtable"><thead><tr><th></th><th>工程</th><th>液量</th><th>比重</th><th>°P</th></tr></thead><tbody>${r.steps.map((s,i)=>{const t=tr[i],nm=s.type==='custom'?(s.title||'自由工程'):TYPES[s.type].n;
-    return `<tr class="${t.src==='meas'?'r-meas':t.src==='calc'?'r-calc':'r-same'}"><td class="num">${i+1}</td><td>${esc(nm)}</td><td class="num">${t.vol!=null?fv(t.vol)+' L':'—'}</td><td class="num">${fsg(t.sg)}${t.src==='meas'?' <span class="dot">●</span>':''}</td><td class="num">${t.sg!=null?plato(t.sg).toFixed(1):'—'}</td></tr>`}).join('')}</tbody></table></div>`;
-}
-function chartSVG(r,tr,pts){
-  if(pts.length<1)return `<p class="hint">工程のどこかに液量と比重の実測値を入れると、澱引き・ボイル・希釈のあとの比重を計算して、ここに推移を表示します。</p>`;
-  const N=r.steps.length,W=520,H=130,L=40,R=12,Tp=12,B=26;
-  const sgs=pts.map(p=>p.sg);let lo=Math.min(...sgs),hi=Math.max(...sgs);
+function chartSVG(N,series,brew){
+  const all=series.flatMap(s=>s.pts);
+  if(!all.length)return `<p class="hint">モルト投入にモルトの量、マッシングに糖化効率と得る麦汁量を入れると、各工程の比重を計算してここに推移を表示します。</p>`;
+  const W=520,H=130,L=40,R=12,Tp=12,B=26;
+  let lo=Math.min(...all.map(p=>p.sg)),hi=Math.max(...all.map(p=>p.sg));
   if(hi-lo<0.006){const m=(hi+lo)/2;lo=m-0.004;hi=m+0.004}
   const pad=(hi-lo)*.15;lo-=pad;hi+=pad;
   const x=i=>L+(N<=1?0.5:i/(N-1))*(W-L-R),y=v=>Tp+(hi-v)/(hi-lo)*(H-Tp-B);
-  const ticks=[hi-pad,(hi+lo)/2,lo+pad];
   let s=`<div class="chart-wrap"><svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="工程ごとの比重の推移">`;
-  ticks.forEach(t=>{s+=`<line x1="${L}" x2="${W-R}" y1="${y(t)}" y2="${y(t)}" stroke="var(--line)" stroke-width="1"/><text x="${L-6}" y="${y(t)+4}" text-anchor="end" font-size="10" fill="var(--muted)" font-family="IBM Plex Mono,monospace">${t.toFixed(3)}</text>`});
+  [hi-pad,(hi+lo)/2,lo+pad].forEach(t=>{s+=`<line x1="${L}" x2="${W-R}" y1="${y(t)}" y2="${y(t)}" stroke="var(--line)" stroke-width="1"/><text x="${L-6}" y="${y(t)+4}" text-anchor="end" font-size="10" fill="var(--muted)" font-family="IBM Plex Mono,monospace">${t.toFixed(3)}</text>`});
   for(let i=0;i<N;i++)s+=`<text x="${x(i)}" y="${H-8}" text-anchor="middle" font-size="9" fill="var(--muted)" font-family="IBM Plex Mono,monospace">${i+1}</text>`;
-  if(pts.length>1)s+=`<polyline points="${pts.map(p=>x(p.i)+','+y(p.sg)).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>`;
-  pts.forEach(p=>{const m=p.src==='meas';s+=`<circle cx="${x(p.i)}" cy="${y(p.sg)}" r="${m?4.5:3.5}" fill="${m?'var(--hop)':'var(--surface)'}" stroke="${m?'var(--hop)':'var(--accent)'}" stroke-width="2"/>`});
-  s+=`</svg></div><div style="display:flex;gap:12px;font-size:.75rem;color:var(--muted)"><span><span style="color:var(--hop)">●</span> 実測</span><span><span style="color:var(--accent)">○</span> 計算</span><span>横軸は工程番号</span></div>`;
+  series.forEach(se=>{
+    const pts=se.pts;
+    if(pts.length>1)s+=`<polyline points="${pts.map(p=>x(p.i)+','+y(p.sg)).join(' ')}" fill="none" stroke="${se.plan?'var(--muted)':'var(--accent)'}" stroke-width="${se.plan?1.5:2}" ${se.plan?'stroke-dasharray="4 4"':''} stroke-linejoin="round"/>`;
+    if(!se.plan)pts.forEach(p=>{const m=p.src==='meas';s+=`<circle cx="${x(p.i)}" cy="${y(p.sg)}" r="${m?4.5:3.5}" fill="${m?'var(--hop)':'var(--surface)'}" stroke="${m?'var(--hop)':'var(--accent)'}" stroke-width="2"/>`});
+  });
+  s+=`</svg></div><div class="legend">${brew?'<span><i class="lg-plan"></i> 予定</span><span><span style="color:var(--hop)">●</span> 実測</span><span><span style="color:var(--accent)">○</span> 計算</span>':'<span><span style="color:var(--accent)">○</span> 計算</span>'}<span>横軸は工程番号</span></div>`;
   return s;
+}
+
+function gravTable(r,tr,pt){
+  if(!tr.some(x=>x.sg!=null))return '';
+  const brew=!!pt;
+  return `<div class="gtable-wrap"><div class="label">工程ごとの比重</div><table class="gtable ${brew?'is-brew':''}"><thead><tr><th></th><th>工程</th><th>液量</th>${brew?'<th>予定</th><th>実際</th>':'<th>比重</th><th>°P</th>'}</tr></thead><tbody>${r.steps.map((s,i)=>{const t=tr[i],p=pt&&pt[s.id];
+    const cls=t.src==='meas'?'r-meas':t.src==='calc'?'r-calc':'r-same';
+    return `<tr class="${cls}"><td class="num">${i+1}</td><td>${esc(stepName(s))}${brew&&s.done?' <span class="ok">✓</span>':''}</td><td class="num">${t.vol!=null?fv(t.vol)+' L':'—'}</td>${brew
+      ?`<td class="num plan">${p?fsg(p.sg):'—'}</td><td class="num">${fsg(t.sg)}${t.src==='meas'?' <span class="dot">●</span>':''}</td>`
+      :`<td class="num">${fsg(t.sg)}</td><td class="num">${t.sg!=null?plato(t.sg).toFixed(1):'—'}</td>`}</tr>`}).join('')}</tbody></table></div>`;
 }
 
 function inputHTML(sid,group,f,val){
@@ -385,31 +442,46 @@ function inputHTML(sid,group,f,val){
   return `<div class="field"><label for="${sid}-${group}-${f.k}">${f.l}</label><div class="inp"><input id="${sid}-${group}-${f.k}" type="${isText?'text':'number'}" ${isText?'':`inputmode="decimal" step="${f.step||'any'}"`} data-f="${sid}|${group}|${f.k}" value="${esc(val)}" placeholder="${f.u==='SG'?'1.050':''}">${f.u&&f.u!=='SG'?`<u>${f.u}</u>`:''}</div></div>`;
 }
 
-function stepHTML(r,s,i,t){
-  const ty=TYPES[s.type],last=i===r.steps.length-1;
-  const title=s.type==='custom'?(s.title||'自由工程'):ty.n;
-  let h=`<article class="step" id="st-${s.id}"><div class="step-head"><span class="step-no">${i+1}</span>
-    <button class="step-title" data-act="toggle" data-id="${s.id}" aria-expanded="${s.open}"><b>${esc(title)}</b>${s.open?'':`<span>${esc(stepSummary(s))}</span>`}</button>
-    <div class="icons"><button class="icon" data-act="up" data-id="${s.id}" ${i===0?'disabled':''} aria-label="上へ">↑</button><button class="icon" data-act="down" data-id="${s.id}" ${last?'disabled':''} aria-label="下へ">↓</button>
+function stepHTML(r,s,i,t,p){
+  const ty=TYPES[s.type],last=i===r.steps.length-1,brew=isBrew();
+  let h=`<article class="step ${s.open?'is-open':''} ${brew&&s.done?'is-done':''}" id="st-${s.id}"><div class="step-head">
+    <button class="step-title" data-act="toggle" data-id="${s.id}" aria-expanded="${s.open}" aria-label="${s.open?'閉じる':'開く'}">${CHEV}<span class="step-no">${brew&&s.done?'✓':i+1}</span><span class="tt"><b>${esc(stepName(s))}</b>${s.open?'':`<span>${esc(stepSummary(s))}</span>`}</span></button>
+    <div class="icons">${brew?`<button class="icon check ${s.done?'on':''}" data-act="done" data-id="${s.id}" aria-label="${s.done?'完了を取り消す':'完了にする'}">✓</button>`:''}<button class="icon" data-act="up" data-id="${s.id}" ${i===0?'disabled':''} aria-label="上へ">↑</button><button class="icon" data-act="down" data-id="${s.id}" ${last?'disabled':''} aria-label="下へ">↓</button>
     <button class="icon ${armed===s.id?'warn':''}" data-act="dels" data-id="${s.id}" aria-label="削除">${armed===s.id?'削除する':'✕'}</button></div></div>`;
   if(s.open){
     h+=`<div class="step-body">`;
     if(s.type==='custom')h+=`<div class="field"><label for="${s.id}-title">工程名</label><div class="inp"><input id="${s.id}-title" type="text" data-f="${s.id}|title" value="${esc(s.title)}" placeholder="例：ホップスタンド"></div></div>`;
     if(ty.fields&&ty.fields.length)h+=`<div class="fields">${ty.fields.map(f=>inputHTML(s.id,'p',f,s.p[f.k])).join('')}</div>`;
+    if(s.type==='mash')h+=`<p class="hint">得る麦汁量は、スパージングまで終えてボイルに入る前の麦汁の量です。</p>`;
     if(ty.list)h+=listHTML(s,ty.list);
     if(ty.hint)h+=`<p class="hint">${ty.hint}</p>`;
     if(s.type==='dilute')h+=`<div id="help-${s.id}">${diluteHelp(s,t)}</div>`;
-    if(s.type==='mash'||s.type==='dissolve')h+=`<div id="info-${s.id}">${calcInfo(s,t)}</div>`;
-    h+=`<div class="meas"><div class="meas-head"><span class="label">この工程後の実測</span>${s.type==='measure'?'':'<span class="hint">わかる時だけ</span>'}</div>
-      <div class="fields">${inputHTML(s.id,'meas',{k:'vol',l:'液量',u:'L'},s.meas.vol)}${inputHTML(s.id,'meas',{k:'sg',l:'比重',u:'SG',step:'0.001'},s.meas.sg)}</div>
-      <textarea id="${s.id}-memo" data-f="${s.id}|memo" rows="1" placeholder="メモ">${esc(s.memo)}</textarea></div></div>`;
+    if(s.type==='mash'||s.type==='dissolve')h+=`<div id="info-${s.id}">${calcInfo(t)}</div>`;
+    if(brew)h+=`<div class="meas"><div class="meas-head"><span class="label">この工程後の実測</span><span class="hint">わかる時だけ</span></div>
+      <div class="fields">${inputHTML(s.id,'meas',{k:'vol',l:'液量',u:'L'},s.meas.vol)}${inputHTML(s.id,'meas',{k:'sg',l:'比重',u:'SG',step:'0.001'},s.meas.sg)}</div></div>`;
+    h+=`<textarea id="${s.id}-memo" data-f="${s.id}|memo" rows="1" placeholder="メモ">${esc(s.memo)}</textarea></div>`;
   }
-  h+=`<div class="after" id="after-${s.id}">${afterHTML(t)}</div></article>`;
+  h+=`<div class="after" id="after-${s.id}">${afterHTML(t,p,brew)}</div></article>`;
   return h;
 }
-function afterHTML(t){
-  if(t.vol==null&&t.sg==null)return `<span class="muted">工程後の液量・比重：未確定</span>`;
-  return `<span class="muted">工程後</span><span class="num">${fv(t.vol)} L</span><span class="num">SG ${fsg(t.sg)}</span>${t.sg!=null?`<span class="num muted">${plato(t.sg).toFixed(1)}°P</span>`:''}${t.src==='meas'?'<span class="chip hop">実測</span>':t.src==='calc'?'<span class="chip">計算</span>':'<span class="chip plain">前工程のまま</span>'}`;
+function afterHTML(t,p,brew){
+  const plan=brew&&p&&p.sg!=null?`<span class="muted plan-v">予定 <span class="num">${fsg(p.sg)}</span></span>`:'';
+  if(t.vol==null&&t.sg==null)return `<span class="muted">工程後の液量・比重：まだ計算できません</span>${plan}`;
+  const chip=t.src==='meas'?'<span class="chip hop">実測</span>':t.src==='calc'?'<span class="chip">計算</span>':'<span class="chip plain">前工程のまま</span>';
+  return `<span class="muted">工程後</span><span class="num">${fv(t.vol)} L</span><span class="num">SG ${fsg(t.sg)}</span>${t.sg!=null?`<span class="num muted">${plato(t.sg).toFixed(1)}°P</span>`:''}${chip}${plan}`;
+}
+function calcInfo(t){
+  const i=t.info;if(!i)return '';
+  if(i.kind==='dissolve'){
+    if(!i.kg)return `<p class="hint">エキスの量を入れると、溶解後の比重を計算します。</p>`;
+    if(!i.water)return `<p class="hint">この工程より前の「水質調整」か「湯沸かし」に水量を入れると、比重を計算します。</p>`;
+    return `<div class="calc"><div>エキス <span class="num">${i.kg.toFixed(2)} kg</span> × 収率 = <b class="num">${i.E.toFixed(2)} kg</b>、水 <span class="num">${fv(i.water)} L</span></div><div class="calc-res">→ <b class="num">${fv(i.vol)} L</b> / <b class="num">SG ${fsg(i.sg)}</b> <span class="num muted">${plato(i.sg).toFixed(1)}°P</span></div></div>`;
+  }
+  if(!i.kg)return `<p class="hint">この工程より前の「モルト投入」にモルトの量を入れると、麦汁の比重を計算します。</p>`;
+  if(!i.V)return `<p class="hint">「得る麦汁量」を入れると、その量の麦汁の比重を計算します。</p>`;
+  let h=`<div class="calc"><div>モルト <span class="num">${i.kg.toFixed(2)} kg</span> × 収率 → エキス最大 <span class="num">${i.pot.toFixed(2)} kg</span><br>× 糖化効率 <span class="num">${i.eff}%</span> = <b class="num">${i.E.toFixed(2)} kg</b> を <span class="num">${fv(i.V)} L</span> の麦汁に</div><div class="calc-res">→ <b class="num">SG ${fsg(i.sg)}</b> <span class="num muted">${plato(i.sg).toFixed(1)}°P</span></div>`;
+  if(i.actEff!=null)h+=`<div class="act">実測（<span class="num">${fv(i.actVol)} L / ${fsg(i.actSg)}</span>${i.volGuessed?'、液量は予定値':''}）から求めた糖化効率 <b class="num">${i.actEff.toFixed(1)}%</b></div>`;
+  return h+`</div>`;
 }
 function diluteHelp(s,t){
   const tg=n(s.p.target),b=t.before;
@@ -434,27 +506,28 @@ function listHTML(s,L){
 
 function sheetHTML(){
   const r=cur(),st=STYLES[r.style];
-  const rest=Object.keys(TYPES).filter(k=>!st.picks.includes(k)&&!OTHER.includes(k));
+  const other=isBrew()?['measure','custom']:['custom'];
+  const rest=Object.keys(TYPES).filter(k=>!st.picks.includes(k)&&!['measure','custom'].includes(k));
   const grid=ks=>`<div class="picks">${ks.map(k=>`<button class="pick" data-act="add" data-type="${k}"><b>${TYPES[k].n}</b><span>${TYPES[k].sub}</span></button>`).join('')}</div>`;
   return `<div class="scrim" data-act="close"><div class="sheet" role="dialog" aria-label="工程を追加">
     <div class="sheet-head"><h2>工程を追加</h2><button class="ghost" data-act="close">閉じる</button></div>
     <div class="label">${st.name}の工程</div>${grid(st.picks)}
-    <div class="label">記録・その他</div>${grid([...OTHER,...rest])}</div></div>`;
+    <div class="label">${isBrew()?'記録・その他':'その他'}</div>${grid([...other,...rest])}</div></div>`;
 }
 
 function refreshComputed(){
-  const r=cur();if(!r)return;const tr=track(r),lastK=[...tr].reverse().find(x=>x.vol!=null||x.sg!=null);
-  document.getElementById('summary').innerHTML=summaryInner(r,tr,lastK,totalTime(r));
-  r.steps.forEach((s,i)=>{const a=document.getElementById('after-'+s.id);if(a)a.innerHTML=afterHTML(tr[i]);
+  const r=cur();if(!r)return;const brew=isBrew(),tr=track(r.steps,brew),pt=brew?planRows(r):null;
+  document.getElementById('summary').innerHTML=summaryInner(r,tr,pt);
+  r.steps.forEach((s,i)=>{const a=document.getElementById('after-'+s.id);if(a)a.innerHTML=afterHTML(tr[i],pt&&pt[s.id],brew);
     const h=document.getElementById('help-'+s.id);if(h)h.innerHTML=diluteHelp(s,tr[i]);
-    const c=document.getElementById('info-'+s.id);if(c)c.innerHTML=calcInfo(s,tr[i])});
+    const c=document.getElementById('info-'+s.id);if(c)c.innerHTML=calcInfo(tr[i])});
 }
 function touch(){const r=cur();if(r)r.updated=Date.now();save()}
 
 function onInput(e){
   const el=e.target.closest('[data-f]');if(!el)return;
   const parts=el.dataset.f.split('|'),r=cur();if(!r)return;
-  if(parts[0]==='recipe'){r.name=el.value;touch();return}
+  if(parts[0]==='doc'){r[parts[1]]=el.value;touch();return}
   const s=r.steps.find(x=>x.id===parts[0]);if(!s)return;
   if(parts[1]==='p')s.p[parts[2]]=el.value;
   else if(parts[1]==='meas')s.meas[parts[2]]=el.value;
@@ -469,20 +542,22 @@ document.addEventListener('change',onInput);
 document.addEventListener('click',e=>{
   const b=e.target.closest('[data-act]');if(!b)return;
   if(b.classList.contains('scrim')&&e.target!==b)return;
-  const a=b.dataset.act,id=b.dataset.id,r=cur();
+  const a=b.dataset.act,id=b.dataset.id,r=view.screen==='home'?null:cur();
   const prevArmed=armed;armed=null;
   const idx=r?r.steps.findIndex(s=>s.id===id):-1;
   switch(a){
-    case 'new':{const st=b.dataset.style,nr={id:uid(),name:'',style:st,updated:Date.now(),steps:['water',st==='extract'?'dissolve':'malt'].map(k=>mkStep(k,st))};db.recipes.push(nr);view={screen:'editor',rid:nr.id};save();break}
-    case 'open':view={screen:'editor',rid:id};break;
-    case 'home':view={screen:'home',rid:null};sheet=false;break;
-    case 'delr':if(prevArmed==='r'+id){db.recipes=db.recipes.filter(x=>x.id!==id);save()}else armed='r'+id;break;
+    case 'new':{const st=b.dataset.style,nr={id:uid(),name:'',style:st,updated:Date.now(),steps:['water',st==='extract'?'dissolve':'malt'].map(k=>mkStep(k,st))};db.recipes.push(nr);view={screen:'recipe',id:nr.id};save();break}
+    case 'open':view={screen:b.dataset.kind==='b'?'brew':'recipe',id};window.scrollTo(0,0);break;
+    case 'home':view={screen:'home',id:null};sheet=false;window.scrollTo(0,0);break;
+    case 'del':{const k=b.dataset.kind;if(prevArmed===k+id){if(k==='r')db.recipes=db.recipes.filter(x=>x.id!==id);else db.brews=db.brews.filter(x=>x.id!==id);save()}else armed=k+id;break}
+    case 'startBrew':{const nb=startBrew(r);db.brews.push(nb);view={screen:'brew',id:nb.id};save();window.scrollTo(0,0);break}
     case 'tpl':{const have=new Set(r.steps.map(x=>x.type));STYLES[r.style].tpl.filter(k=>!have.has(k)).forEach(k=>{const s=mkStep(k,r.style);s.open=false;r.steps.push(s)});touch();break}
     case 'sheet':sheet=true;break;
     case 'close':sheet=false;break;
     case 'add':{const s=mkStep(b.dataset.type,r.style);r.steps.push(s);sheet=false;touch();render();
       requestAnimationFrame(()=>document.getElementById('st-'+s.id)?.scrollIntoView({behavior:'smooth',block:'center'}));return}
     case 'toggle':r.steps[idx].open=!r.steps[idx].open;save();break;
+    case 'done':r.steps[idx].done=!r.steps[idx].done;if(r.steps[idx].done)r.steps[idx].open=false;touch();break;
     case 'up':if(idx>0){[r.steps[idx-1],r.steps[idx]]=[r.steps[idx],r.steps[idx-1]];touch()}break;
     case 'down':if(idx<r.steps.length-1){[r.steps[idx+1],r.steps[idx]]=[r.steps[idx],r.steps[idx+1]];touch()}break;
     case 'dels':if(prevArmed===id){r.steps.splice(idx,1);touch()}else armed=id;break;
@@ -492,6 +567,7 @@ document.addEventListener('click',e=>{
   }
   render();
 });
+db=load();
 render();
 </script>
 <script>
