@@ -158,6 +158,14 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .gtable.is-brew tr.r-calc td:nth-child(5){color:var(--accent);font-weight:600}
 .gtable.is-brew tr.r-meas td:nth-child(5){color:var(--hop);font-weight:600}
 .gtable .ok{color:var(--hop);font-size:.75rem}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;padding:3px;background:var(--sunk);gap:3px}
+.seg button{flex:1;border:0;background:none;border-radius:7px;padding:7px 4px;font-size:.88rem;color:var(--muted);font-weight:500}
+.seg button.on{background:var(--surface);color:var(--accent);font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.lrow.rest{grid-template-columns:20px minmax(0,1fr) minmax(0,1fr) 32px}
+.rn{color:var(--muted);font-size:.8rem;text-align:center}
+.deco{gap:8px}
+.drow{border-top:1px dashed var(--line);padding-top:6px}
+.drow.err{color:var(--danger)}
 .addrow{align-self:flex-start;background:none;border:1px dashed var(--line);border-radius:8px;padding:5px 12px;font-size:.85rem;color:var(--accent)}
 .meas{border-top:1px dashed var(--line);padding-top:10px;display:flex;flex-direction:column;gap:6px}
 .meas-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
@@ -207,13 +215,13 @@ const STYLES={
 const fTemp=(l='温度',d)=>({k:'temp',l,u:'℃',d});
 const fTime=(l='時間',d)=>({k:'time',l,u:'分',d});
 const TYPES={
-  water:{n:'水質調整',sub:'仕込みに使う水と添加物',fields:[{k:'vol',l:'水量',u:'L'}],
+  water:{n:'水質調整',sub:'仕込みに使う水と添加物',fields:[{k:'vol',l:'水量',u:'L'},{k:'ph0',l:'原水のpH',u:'pH',step:'0.01'},{k:'ph',l:'調整後のpH（目標）',u:'pH',step:'0.01'}],
     list:{k:'adds',kind:'add',ph:'添加物の名前',def:[{name:'乳酸 (88%)',amt:'',unit:'ml'},{name:'塩化カルシウム',amt:'',unit:'g'}]},
     hint:'添加物の種類と量は、あとで詳しく設定できるようにする予定です'},
   malt:{n:'モルト投入',sub:'使うモルトと量',list:{k:'malts',kind:'kg',ph:'モルト名',def:[{name:'ピルスナーモルト',amt:'',yld:'80'}]}},
   acid:{n:'アシッドレスト',sub:'pHを下げる休止',fields:[fTemp('温度',35),fTime('時間',20)]},
   protein:{n:'プロテインレスト',sub:'タンパク分解の休止',fields:[fTemp('温度',52),fTime('時間',15)]},
-  mash:{n:'マッシング',sub:'糖化。ここで麦汁の比重を計算',fields:[fTemp('温度',66),fTime('時間',60),{k:'eff',l:'糖化効率',u:'%',d:72},{k:'wort',l:'得る麦汁量',u:'L'}]},
+  mash:{n:'マッシング',sub:'インフュージョンかデコクション。ここで麦汁の比重を計算',fields:[]},
   decoction:{n:'デコクション',sub:'一部を煮出して戻す',fields:[{k:'pull',l:'取り出し量',u:'L'},fTemp('目標温度',72),fTime('煮沸時間',15)]},
   mashout:{n:'マッシュアウト',sub:'酵素を止める',fields:[fTemp('温度',76),fTime('時間',10)]},
   bag:{n:'バッグ引き上げ',sub:'袋を上げて水を切る',fields:[fTime('水切り時間',10)]},
@@ -236,8 +244,8 @@ function uid(){return Math.random().toString(36).slice(2,9)}
 function load(){
   try{const s=JSON.parse(localStorage.getItem(KEY));
     if(s&&Array.isArray(s.recipes)){s.brews=Array.isArray(s.brews)?s.brews:[];
-      s.recipes.forEach(r=>{r.steps=r.steps.filter(x=>TYPES[x.type])});
-      s.brews.forEach(b=>{b.steps=b.steps.filter(x=>TYPES[x.type]);b.plan=(b.plan||[]).filter(x=>TYPES[x.type])});
+      s.recipes.forEach(r=>{r.steps=fixSteps(r.steps)});
+      s.brews.forEach(b=>{b.steps=fixSteps(b.steps);b.plan=fixSteps(b.plan)});
       return s}}catch(e){}
   const r=sample();return {recipes:[r],brews:[sampleBrew(r)]};
 }
@@ -248,16 +256,26 @@ function mkStep(type,style){
   const s={id:uid(),type,p,meas:{vol:'',sg:''},done:false,memo:'',open:true};
   if(t.list)s.list=t.list.def.map(x=>({...x}));
   if(type==='custom')s.title='';
+  if(type==='mash')fixMash(s);
   return s;
 }
+const DEC_DEF=[{target:'64',time:'40'},{target:'72',time:'20'},{target:'76',time:'10'}];
+function fixMash(s){
+  const P={method:'infusion',eff:'72',wort:'',mashWater:'',startTemp:'52',startTime:'15',decN:'1',fire:'5'};
+  for(const k in P)if(s.p[k]==null)s.p[k]=P[k];
+  if(!Array.isArray(s.rests))s.rests=[{temp:s.p.temp||'66',time:s.p.time||'60'}];
+  if(!Array.isArray(s.decs))s.decs=DEC_DEF.slice(0,+s.p.decN||1).map(x=>({...x}));
+  if(!s.meas)s.meas={vol:'',sg:''};
+}
+function fixSteps(a){return (a||[]).filter(x=>TYPES[x.type]).map(x=>{if(x.type==='mash')fixMash(x);if(!x.meas)x.meas={vol:'',sg:''};return x})}
 const copy=o=>JSON.parse(JSON.stringify(o));
 function sample(){
   const r={id:uid(),name:'例：ジャーマンピルス 20L',style:'lauter',updated:Date.now(),steps:[]};
   const add=(type,p={},extra={})=>{const s=mkStep(type);Object.assign(s.p,p);Object.assign(s,extra);s.open=false;r.steps.push(s)};
-  add('water',{vol:'30'},{list:[{name:'乳酸 (88%)',amt:'2',unit:'ml'},{name:'塩化カルシウム',amt:'3',unit:'g'}]});
+  add('water',{vol:'30',ph0:'7.2',ph:'5.5'},{list:[{name:'乳酸 (88%)',amt:'2',unit:'ml'},{name:'塩化カルシウム',amt:'3',unit:'g'}]});
   add('malt',{},{list:[{name:'ピルスナーモルト',amt:'4.6',yld:'80'},{name:'ミュンヘンモルト',amt:'0.4',yld:'78'}]});
   add('protein',{temp:'52',time:'15'});
-  add('mash',{temp:'65',time:'60',eff:'72',wort:'26'});
+  add('mash',{eff:'72',wort:'26',mashWater:'16'},{rests:[{temp:'65',time:'60'}]});
   add('mashout',{temp:'76',time:'10'});
   add('boil',{time:'70',aku:'0.5',evap:'4'});
   add('cool',{temp:'12',time:'30'});
@@ -330,7 +348,26 @@ function track(steps,useMeas){
   }
   return out;
 }
-function totalTime(steps){return steps.reduce((a,s)=>a+(n(s.p.time)||0),0)}
+/* デコクション：取り出した分を100℃にして戻し、全体を目標温度にする。
+   マッシュ全体（水＋モルト）の熱容量はほぼ体積に比例するとみなし、取り出す割合 = (目標 − 今の温度) / (100 − 今の温度)。
+   マッシュの体積 = マッシュ水量 + モルト × 0.67 L/kg。
+   火力：1.5 L を 50℃→100℃ に上げるのに「火力」分かかる、つまり 1分で 1.5×50÷火力 (L·℃) 温められる */
+function decoPlan(s,kg){
+  const W=n(s.p.mashWater),T0=n(s.p.startTemp),fire=n(s.p.fire)||5,rate=1.5*50/fire;
+  if(!W||T0==null)return null;
+  const V=W+kg*0.67;let T=T0;const rows=[];
+  for(const d of s.decs){const Tt=n(d.target);
+    if(Tt==null||Tt<=T||Tt>=100){rows.push({err:Tt==null?'目標温度を入れてください':'今の温度（'+T+'℃）より高く、100℃より低くしてください',T});continue}
+    const f=(Tt-T)/(100-T),Vd=f*V,heat=Vd*(100-T)/rate;rows.push({from:T,to:Tt,Vd,heat,f,rest:n(d.time)||0});T=Tt}
+  return {V,rows,rate};
+}
+function stepTime(s,kg){
+  if(s.type!=='mash')return n(s.p.time)||0;
+  if(s.p.method==='decoction'){const d=decoPlan(s,kg);let t=n(s.p.startTime)||0;(s.decs||[]).forEach((x,i)=>{t+=n(x.time)||0;const r=d&&d.rows[i];if(r&&!r.err)t+=r.heat});return Math.round(t)}
+  return (s.rests||[]).reduce((a,x)=>a+(n(x.time)||0),0);
+}
+function kgBefore(steps,idx){let kg=0;steps.slice(0,idx).forEach(s=>{if((s.type==='malt'||s.type==='dissolve')&&s.list)s.list.forEach(it=>kg+=n(it.amt)||0)});return kg}
+function totalTime(steps){return steps.reduce((a,s,i)=>a+stepTime(s,kgBefore(steps,i)),0)}
 
 function render(){
   const app=document.getElementById('app');
@@ -369,7 +406,13 @@ function homeHTML(){
 
 function stepSummary(s){
   const t=TYPES[s.type],bits=[];
-  (t.fields||[]).forEach(f=>{const v=s.p[f.k];if(v!==''&&v!=null)bits.push(f.t==='text'?v:`${f.l} ${v}${f.u==='SG'?'':f.u}`)});
+  if(s.type==='mash'){
+    if(s.p.method==='decoction')bits.push(`デコクション ${s.decs.length}回（${[s.p.startTemp,...s.decs.map(d=>d.target)].filter(Boolean).join('→')}℃）`);
+    else bits.push('インフュージョン '+s.rests.filter(r=>r.temp).map(r=>`${r.temp}℃${r.time?r.time+'分':''}`).join('→'));
+    if(s.p.eff)bits.push(`効率 ${s.p.eff}%`);if(s.p.wort)bits.push(`麦汁 ${s.p.wort}L`);
+    return bits.join(' · ');
+  }
+  (t.fields||[]).forEach(f=>{const v=s.p[f.k];if(v!==''&&v!=null)bits.push(f.t==='text'?v:`${f.l} ${v}${f.u==='SG'||f.u==='pH'?'':f.u}`)});
   if(s.list){const it=s.list.filter(x=>x.name);if(it.length)bits.push(it.map(x=>x.name+(x.amt?` ${x.amt}${x.unit||'kg'}`:'')).join('、'))}
   return bits.join(' · ')||t.sub;
 }
@@ -452,17 +495,52 @@ function stepHTML(r,s,i,t,p){
     h+=`<div class="step-body">`;
     if(s.type==='custom')h+=`<div class="field"><label for="${s.id}-title">工程名</label><div class="inp"><input id="${s.id}-title" type="text" data-f="${s.id}|title" value="${esc(s.title)}" placeholder="例：ホップスタンド"></div></div>`;
     if(ty.fields&&ty.fields.length)h+=`<div class="fields">${ty.fields.map(f=>inputHTML(s.id,'p',f,s.p[f.k])).join('')}</div>`;
-    if(s.type==='mash')h+=`<p class="hint">得る麦汁量は、スパージングまで終えてボイルに入る前の麦汁の量です。</p>`;
+    if(s.type==='mash')h+=mashBody(s,t);
     if(ty.list)h+=listHTML(s,ty.list);
     if(ty.hint)h+=`<p class="hint">${ty.hint}</p>`;
     if(s.type==='dilute')h+=`<div id="help-${s.id}">${diluteHelp(s,t)}</div>`;
     if(s.type==='mash'||s.type==='dissolve')h+=`<div id="info-${s.id}">${calcInfo(t)}</div>`;
-    if(brew)h+=`<div class="meas"><div class="meas-head"><span class="label">この工程後の実測</span><span class="hint">わかる時だけ</span></div>
-      <div class="fields">${inputHTML(s.id,'meas',{k:'vol',l:'液量',u:'L'},s.meas.vol)}${inputHTML(s.id,'meas',{k:'sg',l:'比重',u:'SG',step:'0.001'},s.meas.sg)}</div></div>`;
+    if(brew)h+=`<div class="meas"><div class="meas-head"><span class="label">${s.type==='water'?'調整後の実測':'この工程後の実測'}</span><span class="hint">わかる時だけ</span></div>
+      <div class="fields">${s.type==='water'?inputHTML(s.id,'meas',{k:'ph',l:'pH',u:'pH',step:'0.01'},s.meas.ph||''):inputHTML(s.id,'meas',{k:'vol',l:'液量',u:'L'},s.meas.vol)+inputHTML(s.id,'meas',{k:'sg',l:'比重',u:'SG',step:'0.001'},s.meas.sg)}</div></div>`;
     h+=`<textarea id="${s.id}-memo" data-f="${s.id}|memo" rows="1" placeholder="メモ">${esc(s.memo)}</textarea></div>`;
   }
-  h+=`<div class="after" id="after-${s.id}">${afterHTML(t,p,brew)}</div></article>`;
+  h+=`<div class="after" id="after-${s.id}">${s.type==='water'?phHTML(s,brew,p):afterHTML(t,p,brew)}</div></article>`;
   return h;
+}
+function phHTML(s,brew,pp){
+  const p0=n(s.p.ph0),p1=n(s.p.ph),pm=brew?n(s.meas.ph):null;
+  if(p0==null&&p1==null&&pm==null)return `<span class="muted">pH：未入力</span>`;
+  return `<span class="muted">pH</span><span class="num">${p0!=null?p0.toFixed(2):'—'}</span><span class="muted">→</span><span class="num">${pm!=null?pm.toFixed(2):p1!=null?p1.toFixed(2):'—'}</span>${pm!=null?'<span class="chip hop">実測</span>':p1!=null?'<span class="chip plain">目標</span>':''}${brew&&pm!=null&&p1!=null?`<span class="muted plan-v">目標 <span class="num">${p1.toFixed(2)}</span></span>`:''}`;
+}
+function seg(sid,key,val,opts){return `<div class="seg" role="radiogroup">${opts.map(([v,l])=>`<button role="radio" aria-checked="${val===v}" class="${val===v?'on':''}" data-act="seg" data-id="${sid}" data-k="${key}" data-v="${v}">${l}</button>`).join('')}</div>`}
+function mashBody(s,t){
+  const kg=t.info?t.info.kg:0,isDec=s.p.method==='decoction';
+  let h=seg(s.id,'method',s.p.method,[['infusion','インフュージョン'],['decoction','デコクション']]);
+  h+=`<div class="fields">${inputHTML(s.id,'p',{k:'eff',l:'糖化効率',u:'%'},s.p.eff)}${inputHTML(s.id,'p',{k:'wort',l:'得る麦汁量',u:'L'},s.p.wort)}</div>
+  <p class="hint">得る麦汁量は、スパージングまで終えてボイルに入る前の麦汁の量です。</p>`;
+  if(!isDec){
+    h+=`<div class="listed"><span class="label">温度と時間（ステップインフュージョン）</span><div class="lrow rest lhead"><span></span><span>温度</span><span>時間</span><span></span></div>${s.rests.map((r,j)=>`<div class="lrow rest"><span class="num rn">${j+1}</span>
+      <div class="inp"><input type="number" inputmode="decimal" step="any" id="${s.id}-r${j}-t" aria-label="温度" data-f="${s.id}|rest|${j}|temp" value="${esc(r.temp)}"><u>℃</u></div>
+      <div class="inp"><input type="number" inputmode="decimal" step="any" id="${s.id}-r${j}-m" aria-label="時間" data-f="${s.id}|rest|${j}|time" value="${esc(r.time)}"><u>分</u></div>
+      <button class="icon" data-act="delRest" data-id="${s.id}" data-j="${j}" aria-label="段を削除" ${s.rests.length<2?'disabled':''}>✕</button></div>`).join('')}
+      <button class="addrow" data-act="addRest" data-id="${s.id}">＋ 段を追加</button></div>`;
+    return h;
+  }
+  h+=`<div class="fields">${inputHTML(s.id,'p',{k:'mashWater',l:'マッシュ水量',u:'L'},s.p.mashWater)}${inputHTML(s.id,'p',{k:'startTemp',l:'最初の休止温度',u:'℃'},s.p.startTemp)}${inputHTML(s.id,'p',{k:'startTime',l:'最初の休止時間',u:'分'},s.p.startTime)}
+    <div class="field"><label for="${s.id}-decN">デコクション回数</label><div class="inp"><select id="${s.id}-decN" data-f="${s.id}|decN">${[1,2,3].map(k=>`<option value="${k}" ${s.decs.length===k?'selected':''}>${k} 回</option>`).join('')}</select></div></div></div>
+    <div class="listed"><span class="label">戻したあとの目標温度と休止時間</span><div class="lrow rest lhead"><span></span><span>目標温度</span><span>休止時間</span><span></span></div>${s.decs.map((d,j)=>`<div class="lrow rest"><span class="num rn">${j+1}</span>
+      <div class="inp"><input type="number" inputmode="decimal" step="any" id="${s.id}-d${j}-t" aria-label="目標温度" data-f="${s.id}|dec|${j}|target" value="${esc(d.target)}"><u>℃</u></div>
+      <div class="inp"><input type="number" inputmode="decimal" step="any" id="${s.id}-d${j}-m" aria-label="休止時間" data-f="${s.id}|dec|${j}|time" value="${esc(d.time)}"><u>分</u></div><span></span></div>`).join('')}</div>
+    <div class="fields">${inputHTML(s.id,'p',{k:'fire',l:'火力（1.5 L を 50→100℃ にかかる時間）',u:'分'},s.p.fire)}</div>
+    <div id="deco-${s.id}">${decoHTML(s,kg)}</div>`;
+  return h;
+}
+function decoHTML(s,kg){
+  const d=decoPlan(s,kg);
+  if(!d)return `<p class="hint">マッシュ水量と最初の休止温度を入れると、デコクションで取り出す量を計算します。</p>`;
+  return `<div class="calc deco"><div>マッシュの量 <span class="num">${fv(d.V)} L</span>（水 ${esc(s.p.mashWater)} L ＋ モルト ${kg.toFixed(1)} kg）。取り出した分は100℃まで加熱して戻します。</div>
+    ${d.rows.map((r,i)=>r.err?`<div class="drow err">${i+1}回目：${r.err}</div>`:`<div class="drow"><b>${i+1}回目</b>　<span class="num">${r.from}℃</span> のマッシュから <b class="num">${r.Vd.toFixed(1)} L</b> 取り出す（全体の ${Math.round(r.f*100)}%）<br>100℃まで約 <b class="num">${Math.round(r.heat)} 分</b> → 戻して <b class="num">${r.to}℃</b>、${r.rest} 分休止</div>`).join('')}
+    <div class="muted">マッシング全体の目安 <span class="num">${stepTime(s,kg)} 分</span>（煮沸を続ける時間は含みません）</div></div>`;
 }
 function afterHTML(t,p,brew){
   const plan=brew&&p&&p.sg!=null?`<span class="muted plan-v">予定 <span class="num">${fsg(p.sg)}</span></span>`:'';
@@ -532,9 +610,13 @@ function onInput(e){
   if(parts[1]==='p')s.p[parts[2]]=el.value;
   else if(parts[1]==='meas')s.meas[parts[2]]=el.value;
   else if(parts[1]==='list')s.list[+parts[2]][parts[3]]=el.value;
+  else if(parts[1]==='rest')s.rests[+parts[2]][parts[3]]=el.value;
+  else if(parts[1]==='dec')s.decs[+parts[2]][parts[3]]=el.value;
+  else if(parts[1]==='decN'){const k=+el.value;while(s.decs.length<k)s.decs.push({...DEC_DEF[s.decs.length]});s.decs.length=k;s.p.decN=String(k);touch();render();return}
   else if(parts[1]==='memo')s.memo=el.value;
   else if(parts[1]==='title')s.title=el.value;
   touch();refreshComputed();
+  if(s.type==='mash'){const d=document.getElementById('deco-'+s.id);if(d){const i=r.steps.indexOf(s);d.innerHTML=decoHTML(s,kgBefore(r.steps,i))}}
 }
 document.addEventListener('input',onInput);
 document.addEventListener('change',onInput);
@@ -563,6 +645,9 @@ document.addEventListener('click',e=>{
     case 'dels':if(prevArmed===id){r.steps.splice(idx,1);touch()}else armed=id;break;
     case 'addItem':{const s=r.steps[idx];s.list.push(TYPES[s.type].list.kind==='add'?{name:'',amt:'',unit:'g'}:{name:'',amt:'',yld:''});touch();break}
     case 'delItem':r.steps[idx].list.splice(+b.dataset.j,1);touch();break;
+    case 'seg':r.steps[idx].p[b.dataset.k]=b.dataset.v;touch();break;
+    case 'addRest':{const rs=r.steps[idx].rests,l=rs[rs.length-1];rs.push({temp:l?String((n(l.temp)||60)+6):'66',time:'20'});touch();break}
+    case 'delRest':r.steps[idx].rests.splice(+b.dataset.j,1);touch();break;
     case 'applyDil':r.steps[idx].p.add=b.dataset.v;touch();break;
   }
   render();
