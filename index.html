@@ -240,6 +240,24 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .cbar i{display:block;height:100%;background:var(--g1)}
 .crow .num:last-child{text-align:right}
 .warnbox{background:var(--g3-soft)}
+.sweetbar{display:flex;border-radius:8px;overflow:hidden;font-size:.72rem;font-weight:700}
+.sweetbar span{padding:4px 6px;white-space:nowrap;overflow:hidden}
+.sweetbar span:first-child{background:var(--g1);color:var(--surface)}
+.sweetbar span:last-child{background:var(--accent-soft);color:var(--accent);text-align:right}
+.ab{display:grid;grid-template-columns:auto 1fr auto;gap:6px;align-items:center;font-size:.7rem;color:var(--muted)}
+.abbar{height:6px;border-radius:99px;background:var(--accent);overflow:hidden}
+.abbar i{display:block;height:100%;background:var(--g1)}
+.taste{border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:8px}
+.balance{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;font-size:.78rem;color:var(--muted)}
+.baltrack{position:relative;height:10px;border-radius:99px;background:linear-gradient(90deg,var(--accent),var(--line) 50%,var(--g2))}
+.baltrack i{position:absolute;top:50%;width:16px;height:16px;border-radius:50%;background:var(--surface);border:3px solid var(--ink);transform:translate(-50%,-50%)}
+.balnote{font-size:.88rem;font-weight:700}
+.tbars{display:flex;flex-direction:column;gap:6px}
+.trow{display:grid;grid-template-columns:92px 1fr 30px;gap:8px;align-items:center;font-size:.8rem}
+.trow .num{text-align:right;color:var(--muted)}
+.tbar{height:8px;border-radius:99px;background:var(--line);overflow:hidden}
+.tbar i{display:block;height:100%}
+.small{font-size:.72rem}
 .addrow{align-self:flex-start;background:none;border:1px dashed var(--line);border-radius:8px;padding:5px 12px;font-size:.85rem;color:var(--accent)}
 .meas{border-top:1px dashed var(--line);padding-top:10px;display:flex;flex-direction:column;gap:6px}
 .meas-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
@@ -547,6 +565,28 @@ function mashConv(s){
   const need=tg=>{if(!main)return null;const x=(-Math.log(1-tg)-S)/main.k;return x>0?Math.ceil(x):0};
   return {rows,c,main,S,need95:need(0.95),need99:need(0.99),none:!rows.some(r=>r.k>0)};
 }
+/* 麦汁の発酵しやすさ（αアミラーゼとβアミラーゼのバランス）
+   βアミラーゼ（60〜65℃でよく働く）は発酵しやすい麦芽糖を作り、αアミラーゼ（68〜72℃）は発酵しにくいデキストリンを多く残す。
+   温度ごとの「発酵性糖の割合」：62℃以下 82%、62〜70℃で直線的に下がって 70℃で 62%、72℃以上 58%。
+   各休止で進んだ糖化の量で重みを付けて平均する。
+   酵母の発酵度は 66℃前後の麦汁（発酵性 72%）での値とみなし、この割合に比例して補正する */
+function fermFrac(T){if(T==null)return 0.72;if(T<=62)return 0.82;if(T<=70)return 0.82-(T-62)*0.025;if(T<72)return 0.62-(T-70)*0.02;return 0.58}
+function mashFerm(s){
+  const m=mashConv(s);let prev=0,w=0,sum=0,beta=0;
+  m.rows.forEach(r=>{const dc=r.c-prev;prev=r.c;if(dc>0){w+=dc;sum+=dc*fermFrac(r.T);beta+=dc*Math.max(0,Math.min(1,(70-(r.T??66))/8))}});
+  const F=w>0?sum/w:0.72,B=w>0?beta/w:0.5;
+  return {F,B,adj:F/0.72};
+}
+function wortHTML(s,t){
+  const mf=mashFerm(s),m=mashConv(s);if(!m.rows.length||m.none)return '';
+  const pc=Math.round(mf.F*100),label=mf.F>=0.78?'ドライ寄り（発酵しやすい糖が多い）':mf.F>=0.70?'バランス型':'甘め・ボディ寄り（デキストリンが多い）';
+  const ff=t&&t.info&&t.info.E?t.info.E*mf.F:null;
+  return `<div class="calc wort"><div class="label">できる麦汁の性質</div>
+    <div class="calc-res">${label}</div>
+    <div class="sweetbar"><span style="width:${pc}%">発酵性糖 ${pc}%</span><span style="width:${100-pc}%">非発酵性 ${100-pc}%</span></div>
+    <div class="ab"><span>βアミラーゼ（麦芽糖）</span><span class="abbar"><i style="width:${Math.round(mf.B*100)}%"></i></span><span>αアミラーゼ（デキストリン）</span></div>
+    <div class="muted">${ff!=null?`糖 ${t.info.E.toFixed(2)} kg のうち、酵母が食べられるのは約 ${ff.toFixed(2)} kg。`:''}酵母の発酵度を ×${mf.adj.toFixed(2)} で補正して、FG と度数を計算します。低めの温度（62〜65℃）ほどドライで度数が上がり、高め（68〜72℃）ほど甘くボディが出ます。</div></div>`;
+}
 function convHTML(s){
   const m=mashConv(s);
   if(!m.rows.length)return '';
@@ -558,6 +598,7 @@ function convHTML(s){
     <div class="calc-res">→ 糖化 <b class="num">${pc}%</b>：比重の計算に反映しています</div>
     <div class="muted">${tip}ヨウ素反応（ヨウ素液が青紫にならない）で終わりを確かめるのが確実です。</div></div>`;
 }
+const attE=(att,fadj)=>Math.min(98,Math.max(40,(att??DEF.att)*(fadj||1)));
 function solveSG(E,V){let lo=1,hi=1.2;for(let k=0;k<60;k++){const m=(lo+hi)/2;if(V*m*plato(m)/100<E)lo=m;else hi=m}return (lo+hi)/2}
 /* IBU（Tinseth式）：利用率 = 1.65×0.000125^(平均比重−1) × (1−e^(−0.04×煮沸分))/4.15。
    IBU = 利用率 × α酸(%)/100 × ホップ(g) × 1000 ÷ ボイル後の液量(L)。平均比重はボイル前後の平均。
@@ -565,7 +606,7 @@ function solveSG(E,V){let lo=1,hi=1.2;for(let k=0;k<60;k++){const m=(lo+hi)/2;if
    加水すると IBU は薄まる。度数 ABV = (OG − FG) × 131.25。FG = 1 + (OG−1)×(1−発酵度)。
    プライミングの砂糖 1 g/L で約 0.065% 上がる */
 function track(steps,useMeas){
-  let wph=null,ycat='',tau=0,prof=null,vol=null,sg=null,water=0,kg=0,pot=0,ibu=null,att=null,yeastName='',og=null,fermented=false,prime=0,fgMeas=false;const out=[];
+  let fadj=1,wph=null,ycat='',tau=0,prof=null,vol=null,sg=null,water=0,kg=0,pot=0,ibu=null,att=null,yeastName='',og=null,fermented=false,prime=0,fgMeas=false;const out=[];
   for(let si=0;si<steps.length;si++){const s=steps[si];
     const before={vol,sg};let changed=false,info=null;
     if(s.type==='water'||s.type==='heat')water+=n(s.p.vol)||0;
@@ -573,7 +614,7 @@ function track(steps,useMeas){
     if((s.type==='malt'||s.type==='dissolve')&&s.list)s.list.forEach(it=>{const k=n(it.amt);if(k){kg+=k;pot+=k*(n(it.yld)??DEF.yld)/100}});
     if(s.type==='mash'){
       const eff0=n(s.p.eff)??DEF.eff,V=n(s.p.wort),wp=wph?wph.ph:7,mp=mashPH(wp),fac=phFactor(mp),conv=mashConv(s).c,eff=eff0*fac*conv;
-      info={kind:'mash',kg,pot,eff,eff0,fac,conv,mp,wp,noWater:!wph,V};
+      const mf=mashFerm(s);fadj=mf.adj;info={kind:'mash',kg,pot,eff,eff0,fac,conv,mp,wp,noWater:!wph,V,F:mf.F};
       if(pot>0&&V>0){const E=pot*eff/100;sg=solveSG(E,V);vol=V;changed=true;Object.assign(info,{E,sg})}
     }
     if(s.type==='dissolve'){
@@ -600,10 +641,10 @@ function track(steps,useMeas){
     if(s.type==='yeast'){att=n(s.p.atten)??DEF.att;yeastName=s.p.name||'';ycat=s.p.cat||''}
     if(FERMSTEPS.includes(s.type)&&sg!=null&&(fermented||s.type==='ferment1')){
       if(!fermented){og=sg;fermented=true;prof=yeastProfile(ycat,yeastName)}
-      const a=att??DEF.att,T=n(s.p.temp),d=n(s.p.days)||0;
+      const a=attE(att,fadj),T=n(s.p.temp),d=n(s.p.days)||0;
       const k=T!=null?fermRate(T,prof):1;tau+=d*k;const pp=fermP(tau,prof.half);
       sg=1+(og-1)*(1-a/100*pp);changed=true;
-      info={kind:'ferment',og,att:a,assumed:att==null,yeast:yeastName,prof,T,d,k,p:pp,tau,full:1+(og-1)*(1-a/100)};
+      info={kind:'ferment',og,att:a,adjNote:Math.abs(fadj-1)>0.01?`、麦汁の発酵しやすさで ×${fadj.toFixed(2)} 補正済み`:'',assumed:att==null,yeast:yeastName,prof,T,d,k,p:pp,tau,full:1+(og-1)*(1-a/100)};
     }
     if(s.type==='bottle'&&fermented){prime=n(s.p.sugar)||0;info={kind:'bottle',prime}}
     if(s.type==='carbonation'){const c=carbCalc(s,vol);info={kind:'carb',...c};if(fermented&&c.sugar!=null&&s.p.cmethod==='priming'){prime+=c.sugar;info.prime=c.sugar}}
@@ -613,7 +654,7 @@ function track(steps,useMeas){
       if(mv!=null){vol=mv;src='meas'}
       if(ms!=null){sg=ms;src='meas'}
       if(s.type==='mash'&&info&&pot>0&&(mv!=null||ms!=null)&&vol!=null&&sg!=null){info.actEff=vol*sg*plato(sg)/100/pot*100;info.actVol=vol;info.actSg=sg;info.volGuessed=mv==null}
-      if(fermented&&ms!=null){fgMeas=true;const a=att??DEF.att,pm=Math.min(1,Math.max(0,(og-ms)/((og-1)*a/100)));tau=fermTau(pm,prof.half);if(info&&info.kind==='ferment')info.p=pm}
+      if(fermented&&ms!=null){fgMeas=true;const a=attE(att,fadj),pm=Math.min(1,Math.max(0,(og-ms)/((og-1)*a/100)));tau=fermTau(pm,prof.half);if(info&&info.kind==='ferment')info.p=pm}
     }
     const abv=fermented&&og!=null&&sg!=null?(og-sg)*131.25+prime*0.0646:null;
     if(info&&info.kind==='ferment'){info.fg=sg;info.abv=(og-sg)*131.25;info.meas=src==='meas'}
@@ -622,10 +663,10 @@ function track(steps,useMeas){
     if(info&&info.kind==='bottle'){info.abv=abv;info.base=abv!=null?abv-prime*0.0646:null}
     out.push({before,dbase:dbase||before,vol,sg,src,info,ibu,abv,fp});
   }
-  let m={vol:null,og,fg:null,abv:null,ibu,fgMeas,prime,predicted:!fermented,prof,att:att??DEF.att,fullFg:og!=null?1+(og-1)*(1-(att??DEF.att)/100):null};
+  let m={vol:null,og,fg:null,abv:null,ibu,fgMeas,prime,predicted:!fermented,prof,att:attE(att,fadj),fadj,fullFg:og!=null?1+(og-1)*(1-attE(att,fadj)/100):null};
   const last=[...out].reverse().find(x=>x.vol!=null||x.sg!=null);if(last)m.vol=last.vol;
   if(fermented){m.fg=out[out.length-1].sg;m.abv=out[out.length-1].abv}
-  else{const lsg=[...out].reverse().find(x=>x.sg!=null);if(lsg){m.og=lsg.sg;const a=att??DEF.att;m.fg=1+(m.og-1)*(1-a/100);m.abv=(m.og-m.fg)*131.25}}
+  else{const lsg=[...out].reverse().find(x=>x.sg!=null);if(lsg){m.og=lsg.sg;const a=attE(att,fadj);m.fg=1+(m.og-1)*(1-a/100);m.abv=(m.og-m.fg)*131.25}}
   out.meta=m;
   return out;
 }
@@ -791,6 +832,27 @@ function doneHint(b){const a=autoDone(b);return a?`醸造日に発酵・熟成�
 function syncDone(b){if(b.doneAuto!==false)b.doneDate=autoDone(b)}
 function planRows(b){const t=track(b.plan||[],false),m={};(b.plan||[]).forEach((s,i)=>m[s.id]=t[i]);return m}
 
+/* 味わいの予測
+   苦味：IBU（70 IBU で最大）。甘み：FG の残糖（°P）から。苦味が強いと甘みは感じにくくなるので BU:GU で割り引く。
+   ボディ：残糖と度数から。アルコール感：度数（9%で最大）。キレ：見かけの発酵度（60%→0、90%→最大）。
+   バランス：BU:GU（IBU ÷ OGの比重ポイント）。0.3未満は甘い・モルティ、0.5前後で釣り合い、0.7超は苦い */
+function tasteHTML(m){
+  if(m.og==null||m.fg==null)return '';
+  const cl=v=>Math.max(0,Math.min(5,v));
+  const ibu=m.ibu||0,gu=(m.og-1)*1000,bugu=gu>0?ibu/gu:0,fgP=plato(m.fg),abv=m.abv||0,aa=(m.og-m.fg)/(m.og-1)*100;
+  const sc=[['苦味',cl(ibu/14),'--g2'],['甘み',cl(fgP/1.1*(1-0.35*Math.min(1,bugu))),'--accent'],['ボディ',cl((fgP+abv*0.15)/1.2),'--g1'],['アルコール感',cl(abv/1.8),'--g3'],['キレ（ドライ）',cl((aa-60)/6),'--hop']];
+  const pos=Math.min(100,Math.max(0,bugu/1.2*100));
+  const bal=bugu<0.3?'甘くモルティ':bugu<0.45?'ややモルト寄り':bugu<0.65?'苦味と甘みが釣り合う':bugu<0.85?'ややホップ寄り':'苦味がはっきり';
+  const words=[];
+  if(sc[0][1]>=3.5)words.push('苦味がしっかり');else if(sc[0][1]<=1.2)words.push('苦味は控えめ');
+  if(sc[4][1]>=3.5)words.push('ドライでキレがある');else if(sc[2][1]>=3)words.push('甘みとコクがある');else words.push('飲みやすい');
+  if(sc[3][1]>=3.5)words.push('アルコール感が強め');
+  return `<div class="taste"><div class="label">味わいの予測</div>
+    <div class="balance"><span>甘い</span><span class="baltrack"><i style="left:${pos}%"></i></span><span>苦い</span></div>
+    <div class="balnote">${bal}（BU:GU ${bugu.toFixed(2)}）。${words.join('、')}味わい。</div>
+    <div class="tbars">${sc.map(([l,v,c])=>`<div class="trow"><span>${l}</span><span class="tbar"><i style="width:${v/5*100}%;background:var(${c})"></i></span><span class="num">${v.toFixed(1)}</span></div>`).join('')}</div>
+    <div class="muted small">IBU・FG（残糖）・度数・発酵度から計算した目安です（5段階）。</div></div>`;
+}
 function summaryInner(r,tr,pt,pm){
   const brew=!!pt,m=tr.meta;
   const tt=totalTime(r.steps),td=totalDays(r.steps),dn=r.steps.filter(s=>s.done).length;
@@ -808,6 +870,7 @@ function summaryInner(r,tr,pt,pm){
     ${brew?tile('進み具合',`${dn}<span class="sub">/${r.steps.length}</span>`,'工程が完了')
       :tile('仕込み日の作業',tt?Math.floor(tt/60)+':'+String(tt%60).padStart(2,'0'):'—',td?`発酵・熟成 ${td} 日`:`${r.steps.length} 工程`)}
   </div>
+  ${tasteHTML(m)}
   <button class="grav-toggle ${r.showGrav?'is-open':''}" data-act="gravToggle" aria-expanded="${!!r.showGrav}">${CHEV}<span>比重の推移と工程ごとの比重</span></button>
   ${r.showGrav?`<div class="grav-body">${chartSVG(r.steps.length,series,brew)}${gravTable(r,tr,pt)}</div>`:''}`;
 }
@@ -866,6 +929,7 @@ function stepHTML(r,s,i,t,p,first,last){
     if(ty.hint)h+=`<p class="hint">${ty.hint}</p>`;
     if(s.type==='dilute'||s.type==='trub')h+=`<div id="help-${s.id}">${diluteHelp(s,t)}</div>`;
     if(['mash','dissolve','boil','bottle','carbonation',...FERMSTEPS].includes(s.type))h+=`<div id="info-${s.id}">${calcInfo(t)}</div>`;
+    if(s.type==='mash')h=h.replace(`<div id="wort-${s.id}"></div>`,`<div id="wort-${s.id}">${wortHTML(s,t)}</div>`);
     if(s.type==='cool'){const bo=r.steps.slice(0,i).reverse().find(x=>x.type==='boil');if(bo&&bo.hops&&bo.hops.length)h+=`<p class="hint">ホップは${bo.p.hopOut==='after'?'この冷却の<b>後</b>':'この冷却の<b>前</b>'}に取り出す設定です（ボイルの工程で変更できます）。</p>`}
     if(brew)h+=`<div class="meas"><div class="meas-head"><span class="label">${s.type==='water'?'調整後の実測':'この工程後の実測'}</span><span class="hint">わかる時だけ</span></div>
       <div class="fields">${s.type==='water'?inputHTML(s.id,'meas',{k:'ph',l:'pH',u:'pH',step:'0.01'},s.meas.ph||''):inputHTML(s.id,'meas',{k:'vol',l:'液量',u:'L'},s.meas.vol)+inputHTML(s.id,'meas',{k:'sg',l:'比重',u:'SG',step:'0.001'},s.meas.sg)}</div></div>`;
@@ -935,7 +999,7 @@ function mashBody(s,t){
       <div class="inp"><input type="number" inputmode="decimal" step="any" id="${s.id}-r${j}-m" aria-label="時間" data-f="${s.id}|rest|${j}|time" value="${esc(r.time)}"><u>分</u></div>
       <button class="icon" data-act="delRest" data-id="${s.id}" data-j="${j}" aria-label="段を削除" ${s.rests.length<2?'disabled':''}>✕</button></div>`).join('')}
       <button class="addrow" data-act="addRest" data-id="${s.id}">＋ 段を追加</button></div>
-    <div id="conv-${s.id}">${convHTML(s)}</div>`;
+    <div id="conv-${s.id}">${convHTML(s)}</div><div id="wort-${s.id}"></div>`;
     return h;
   }
   h+=`<div class="fields">${inputHTML(s.id,'p',{k:'mashWater',l:'マッシュ水量',u:'L'},s.p.mashWater)}${inputHTML(s.id,'p',{k:'startTemp',l:'最初の休止温度',u:'℃'},s.p.startTemp)}${inputHTML(s.id,'p',{k:'startTime',l:'最初の休止時間',u:'分'},s.p.startTime)}
@@ -945,7 +1009,7 @@ function mashBody(s,t){
       <div class="inp"><input type="number" inputmode="decimal" step="any" id="${s.id}-d${j}-m" aria-label="休止時間" data-f="${s.id}|dec|${j}|time" value="${esc(d.time)}"><u>分</u></div><span></span></div>`).join('')}</div>
     <div class="fields">${inputHTML(s.id,'p',{k:'fire',l:'火力（1.5 L を 50→100℃ にかかる時間）',u:'分'},s.p.fire)}</div>
     <div id="deco-${s.id}">${decoHTML(s,kg)}</div>
-    <div id="conv-${s.id}">${convHTML(s)}</div>`;
+    <div id="conv-${s.id}">${convHTML(s)}</div><div id="wort-${s.id}"></div>`;
   return h;
 }
 function decoHTML(s,kg){
@@ -981,7 +1045,7 @@ function calcInfo(t){
     return `<div class="calc"><div>${esc(i.yeast||'酵母')}（${pr.type}・適温 ${pr.lo}〜${pr.hi}℃）${i.T!=null?` を <span class="num">${i.T}℃</span> で <span class="num">${i.d} 日</span>`:''}${i.assumed?'<br>酵母投入の工程がないため発酵度75%と仮定':''}</div>
       <div class="calc-res">→ この工程の終わりで発酵 <b class="num">${pc}%</b>${i.meas?'（実測から）':''}：SG <b class="num">${fsg(i.fg)}</b>・度数 <b class="num">${i.abv.toFixed(1)}%</b></div>
       <div class="fbar"><i style="width:${Math.min(100,pc)}%"></i></div>
-      <div class="muted">発酵しきった場合 SG ${fsg(i.full)}（発酵度 ${i.att}%）。${note}温度と日数からの推定なので、実際は比重を測って確かめてください。</div></div>`;
+      <div class="muted">発酵しきった場合 SG ${fsg(i.full)}（発酵度 ${i.att.toFixed(0)}%${i.adjNote||''}）。${note}温度と日数からの推定なので、実際は比重を測って確かめてください。</div></div>`;
   }
   if(i.kind==='bottle'){
     if(i.abv==null)return '';
@@ -1085,7 +1149,7 @@ function onInput(e){
   else if(parts[1]==='title')s.title=el.value;
   if(isBrew()&&parts[2]==='days'){syncDone(r);const dd=document.getElementById('bdone');if(dd)dd.value=r.doneDate||'';const h=document.getElementById('done-hint');if(h)h.textContent=doneHint(r)}
   touch();refreshComputed();
-  if(s.type==='mash'){const cv=document.getElementById('conv-'+s.id);if(cv)cv.innerHTML=convHTML(s);const d=document.getElementById('deco-'+s.id);if(d){const i=r.steps.indexOf(s);d.innerHTML=decoHTML(s,kgBefore(r.steps,i))}}
+  if(s.type==='mash'){const cv=document.getElementById('conv-'+s.id);if(cv)cv.innerHTML=convHTML(s);const wt=document.getElementById('wort-'+s.id);if(wt){const i=r.steps.indexOf(s);wt.innerHTML=wortHTML(s,track(r.steps,isBrew())[i])}const d=document.getElementById('deco-'+s.id);if(d){const i=r.steps.indexOf(s);d.innerHTML=decoHTML(s,kgBefore(r.steps,i))}}
 }
 document.addEventListener('input',onInput);
 document.addEventListener('change',onInput);
