@@ -214,6 +214,24 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .meta{grid-template-columns:repeat(3,minmax(0,1fr))!important;align-items:end}
 .meta-note{grid-column:1/-1}
 @media (max-width:420px){.meta{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.tile{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;border-radius:16px;padding:18px 16px;min-height:150px;border:2px solid var(--tc);background:var(--ts)}
+.tile.t-plan{--tc:var(--accent);--ts:var(--accent-soft)}
+.tile.t-brew{--tc:var(--hop);--ts:var(--hop-soft)}
+.tile .tl{font-family:var(--f-display);font-size:1.6rem;color:var(--tc);line-height:1.2}
+.tile .tn{font-size:1.5rem;font-weight:600;color:var(--ink)}
+.tile .tn small{font-size:.8rem;color:var(--muted);font-family:var(--f-body)}
+.tile .td{font-size:.82rem;color:var(--muted);line-height:1.45;margin-top:auto}
+.tile:active{transform:scale(.99)}
+.ltitle{font-size:1.2rem}
+.skiprow{display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px dashed var(--line);padding-top:8px}
+.skipbtn{border:1px solid var(--line);background:var(--sunk);border-radius:99px;padding:6px 14px;font-size:.85rem;font-weight:700;color:var(--muted)}
+.skipbtn.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.needbox{display:flex;flex-direction:column;justify-content:center;gap:2px;min-width:0}
+.need{font-size:.78rem;color:var(--muted);line-height:1.35}
+.need b{color:var(--accent)}
+.need.ok{color:var(--hop)}
+.need.warn{color:var(--danger)}
 .addrow{align-self:flex-start;background:none;border:1px dashed var(--line);border-radius:8px;padding:5px 12px;font-size:.85rem;color:var(--accent)}
 .meas{border-top:1px dashed var(--line);padding-top:10px;display:flex;flex-direction:column;gap:6px}
 .meas-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
@@ -285,8 +303,8 @@ const CATKIND={malt:'malt',dissolve:'extract',water:'add'};
 const fTemp=(l='温度',d)=>({k:'temp',l,u:'℃',d});
 const fTime=(l='時間',d)=>({k:'time',l,u:'分',d});
 const TYPES={
-  water:{n:'水質調整',sub:'仕込みに使う水と添加物',fields:[{k:'vol',l:'水量',u:'L'},{k:'ph0',l:'原水のpH',u:'pH',step:'0.01'},{k:'ph',l:'調整後のpH（目標）',u:'pH',step:'0.01'}],
-    list:{k:'adds',kind:'add',def:[{cat:'lactic',name:'乳酸 (88%)',amt:'',unit:'ml'},{cat:'cacl2',name:'塩化カルシウム',amt:'',unit:'g'}]}},
+  water:{n:'水質調整',sub:'仕込みに使う水とpH調整',fields:[{k:'vol',l:'水量',u:'L'},{k:'ph',l:'目標pH',u:'pH',step:'0.01',d:5.5},{k:'ph0',l:'原水のpH',u:'pH',step:'0.01',d:7.0},{k:'alk',l:'原水のアルカリ度',u:'mg/L',d:40}],
+    list:{k:'adds',kind:'add',def:[{cat:'lactic',name:'乳酸 (88%)',amt:'',unit:'ml'},{cat:'cacl2',name:'塩化カルシウム',amt:'',unit:'g'},{cat:'gyp',name:'硫酸カルシウム（石膏）',amt:'',unit:'g'}]}},
   malt:{n:'モルト投入',sub:'使うモルトと量',list:{k:'malts',kind:'kg',def:[{cat:'wpils',name:'Weyermann ピルスナー',amt:'',yld:'81'}]}},
   acid:{n:'アシッドレスト',sub:'pHを下げる休止',fields:[fTemp('温度',35),fTime('時間',20)]},
   protein:{n:'プロテインレスト',sub:'タンパク分解の休止',fields:[fTemp('温度',52),fTime('時間',15)]},
@@ -346,6 +364,7 @@ function mkStep(type,style){
 function fixExtra(s){
   if(s.list)s.list.forEach(it=>{if(it.cat==null)it.cat=findCat(CATKIND[s.type],it.name)});
   if(s.type==='boil'){if(!Array.isArray(s.hops))s.hops=[];if(!s.p.hopOut)s.p.hopOut='before'}
+  if(s.type==='water'){if(!s.p.ph0)s.p.ph0='7.0';if(!s.p.alk)s.p.alk='40';if(s.p.ph==null)s.p.ph='5.5';if(s.p.skip==null)s.p.skip=false}
   if(s.type==='dryhop'&&!Array.isArray(s.hops))s.hops=[];
   if(s.type==='yeast'){if(s.p.cat==null)s.p.cat=s.p.name?findCat('yeast',s.p.name):'w3470';const c=CATIDX[s.p.cat];if(c&&!s.p.name)s.p.name=c.name;if(s.p.atten==null)s.p.atten=c?String(c.v):String(DEF.att);if(s.p.temp==null)s.p.temp='';if(s.p.grams==null)s.p.grams=''}
   if(s.hops)s.hops.forEach(h=>{if(h.cat==null)h.cat=findCat('hop',h.name)});
@@ -363,7 +382,7 @@ const copy=o=>JSON.parse(JSON.stringify(o));
 function sample(){
   const r={id:uid(),name:'例：ジャーマンピルス 20L',style:'lauter',updated:Date.now(),steps:[]};
   const add=(type,p={},extra={})=>{const s=mkStep(type);Object.assign(s.p,p);Object.assign(s,extra);s.open=false;r.steps.push(s)};
-  add('water',{vol:'30',ph0:'7.2',ph:'5.5'},{list:[{cat:'lactic',name:'乳酸 (88%)',amt:'2',unit:'ml'},{cat:'cacl2',name:'塩化カルシウム',amt:'3',unit:'g'}]});
+  add('water',{vol:'30',ph0:'7.0',alk:'40',ph:'5.5'},{list:[{cat:'lactic',name:'乳酸 (88%)',amt:'0.8',unit:'ml'},{cat:'cacl2',name:'塩化カルシウム',amt:'2.8',unit:'g'},{cat:'gyp',name:'硫酸カルシウム（石膏）',amt:'',unit:'g'}]});
   add('malt',{},{list:[{cat:'wpils',name:'Weyermann ピルスナー',amt:'4.6',yld:'81'},{cat:'wmun1',name:'Weyermann ミュンヘン I',amt:'0.4',yld:'80'}]});
   add('protein',{temp:'52',time:'15'});
   add('mash',{eff:'72',wort:'26',mashWater:'16'},{rests:[{temp:'65',time:'60'}]});
@@ -409,6 +428,54 @@ const stepName=s=>s.type==='custom'?(s.title||'自由工程'):TYPES[s.type].n;
    スパージングの湯量などは途中経過なので計算に使わない。
    ボイル：灰汁で液量が減り（比重は同じ）、蒸発で糖の総量はそのまま濃くなる。澱引きは比重そのまま、加水は薄まる。
    記録モードでは実測値で上書きし、そこから先を計算し直す */
+/* 水質調整の計算
+   酸の必要量：炭酸の平衡（pKa1=6.35）で、原水のアルカリ度を目標pHまで中和するのに要る酸の当量(mEq)を求める。
+     アルカリ度 A(mEq/L)=mg/L÷50、全炭酸 CT=A×(1+10^(6.35−原水pH))、目標pHでの重炭酸 = CT÷(1+10^(6.35−目標pH))、必要量 = A − それ
+   乳酸88%は1mlで約11.6mEq、リン酸75%は約12.0mEq。
+   カルシウムは水のpHはほぼ変えないが、マッシュ中でリン酸と反応して酸性にする（コルバッハ：Ca mEq÷3.5、Mg÷7）ので、その分を酸の当量に換算。
+     塩化カルシウム(2水和物)1g≒3.89mEq、石膏1g≒3.32mEq、硫酸マグネシウム1g≒1.16mEq。重曹・炭酸カルシウムはpHを上げる（マイナス）。
+   塩化カルシウムは150ppm（150mg/L）まで。
+   マッシュpHの推定：麦芽の緩衝作用で、マッシュpH ≒ 5.4 + (水のpH − 5.4)×0.2。
+   糖化効率への影響：マッシュpH 5.2〜5.5 は100%、外れると0.1ごとに3%ずつ下がる（入力した糖化効率はpHが最適なときの値とみなす） */
+const ADDF={lactic:11.6,phos:12.0,cacl2:3.89,gyp:3.32,mgso4:1.16,nahco3:-11.9,caco3:-14.3,nacl:0};
+const CACL2_MAX=150;
+function waterCalc(s){
+  const V=n(s.p.vol),ph0=n(s.p.ph0)??7,alk=n(s.p.alk)??40,tg=n(s.p.ph);
+  const A=alk/50,CT=A*(1+Math.pow(10,6.35-ph0));
+  const needL=tg!=null&&tg<ph0?Math.max(0,A-CT/(1+Math.pow(10,6.35-tg))):0;
+  const N=V?needL*V:null;
+  const items=(s.list||[]).map((it,j)=>({it,j,f:ADDF[it.cat],a:n(it.amt)}));
+  const got=items.reduce((t,x)=>t+(x.f&&x.a?x.f*x.a:0),0);
+  const rows=items.map(x=>{
+    const r={...x,need:null,capped:false,over:false};
+    if(x.cat==='cacl2'||x.it.cat==='cacl2'){r.cap=V?CACL2_MAX*V/1000:null;if(x.a&&V&&x.a/V*1000>CACL2_MAX)r.over=true}
+    if(N!=null&&x.f>0){
+      const others=got-(x.f&&x.a?x.f*x.a:0),rest=N-others;
+      let need=Math.max(0,rest/x.f);
+      if(x.it.cat==='cacl2'&&r.cap!=null&&need>r.cap){r.capped=true;r.full=need;need=r.cap}
+      r.need=need;
+    }
+    return r;
+  });
+  let ach=null;
+  if(V&&items.some(x=>x.a)){
+    const x=got/V,h=A-x;
+    if(h>1e-6)ach=6.35+Math.log10(h/Math.max(1e-6,CT-h));
+    else ach=Math.max(3,-Math.log10(Math.max(1e-7,(-h)/1000)));
+    if(got===0)ach=ph0;
+  }
+  return {V,ph0,alk,tg,A,N,got,rows,ach,over:N!=null&&got>N*1.05};
+}
+function waterPH(s,useMeas){
+  if(s.p.skip)return {ph:7,how:'省略（pH 7 とみなす）'};
+  if(useMeas&&n(s.meas&&s.meas.ph)!=null)return {ph:n(s.meas.ph),how:'実測'};
+  const w=waterCalc(s);
+  if(w.ach!=null)return {ph:w.ach,how:'添加量から推定'};
+  if(w.tg!=null)return {ph:w.tg,how:'目標（添加量が未入力）'};
+  return {ph:w.ph0,how:'原水のまま'};
+}
+const mashPH=wph=>5.4+(wph-5.4)*0.2;
+const phFactor=mph=>mph>5.5?Math.max(0.5,1-(mph-5.5)*0.3):mph<5.2?Math.max(0.5,1-(5.2-mph)*0.3):1;
 function solveSG(E,V){let lo=1,hi=1.2;for(let k=0;k<60;k++){const m=(lo+hi)/2;if(V*m*plato(m)/100<E)lo=m;else hi=m}return (lo+hi)/2}
 /* IBU（Tinseth式）：利用率 = 1.65×0.000125^(平均比重−1) × (1−e^(−0.04×煮沸分))/4.15。
    IBU = 利用率 × α酸(%)/100 × ホップ(g) × 1000 ÷ ボイル後の液量(L)。平均比重はボイル前後の平均。
@@ -416,14 +483,15 @@ function solveSG(E,V){let lo=1,hi=1.2;for(let k=0;k<60;k++){const m=(lo+hi)/2;if
    加水すると IBU は薄まる。度数 ABV = (OG − FG) × 131.25。FG = 1 + (OG−1)×(1−発酵度)。
    プライミングの砂糖 1 g/L で約 0.065% 上がる */
 function track(steps,useMeas){
-  let vol=null,sg=null,water=0,kg=0,pot=0,ibu=null,att=null,yeastName='',og=null,fermented=false,prime=0,fgMeas=false;const out=[];
+  let wph=null,vol=null,sg=null,water=0,kg=0,pot=0,ibu=null,att=null,yeastName='',og=null,fermented=false,prime=0,fgMeas=false;const out=[];
   for(let si=0;si<steps.length;si++){const s=steps[si];
     const before={vol,sg};let changed=false,info=null;
     if(s.type==='water'||s.type==='heat')water+=n(s.p.vol)||0;
+    if(s.type==='water'){const w=waterPH(s,useMeas);wph=w;const mp=mashPH(w.ph);info={kind:'water',wph:w.ph,how:w.how,mph:mp,fac:phFactor(mp)}}
     if((s.type==='malt'||s.type==='dissolve')&&s.list)s.list.forEach(it=>{const k=n(it.amt);if(k){kg+=k;pot+=k*(n(it.yld)??DEF.yld)/100}});
     if(s.type==='mash'){
-      const eff=n(s.p.eff)??DEF.eff,V=n(s.p.wort);
-      info={kind:'mash',kg,pot,eff,V};
+      const eff0=n(s.p.eff)??DEF.eff,V=n(s.p.wort),wp=wph?wph.ph:7,mp=mashPH(wp),fac=phFactor(mp),eff=eff0*fac;
+      info={kind:'mash',kg,pot,eff,eff0,fac,mp,wp,noWater:!wph,V};
       if(pot>0&&V>0){const E=pot*eff/100;sg=solveSG(E,V);vol=V;changed=true;Object.assign(info,{E,sg})}
     }
     if(s.type==='dissolve'){
@@ -494,10 +562,10 @@ function totalDays(steps){return steps.reduce((a,s)=>a+(n(s.p.days)||0),0)}
 
 function render(){
   const app=document.getElementById('app');
-  if(view.screen!=='home'&&!cur())view={screen:'home',id:null};
-  app.innerHTML=view.screen==='home'?homeHTML():editorHTML();
+  if(!isList()&&!cur())view={screen:'home',id:null};
+  app.innerHTML=isList()?homeHTML():editorHTML();
   let sh=document.getElementById('sheet');
-  if(sheet&&(view.screen!=='home'||sheet==='pick')){
+  if(sheet&&(!isList()||sheet==='pick')){
     if(!sh){sh=document.createElement('div');sh.id='sheet';document.body.appendChild(sh)}
     sh.innerHTML=sheet==='pick'?pickHTML():sheetHTML();
   }else if(sh)sh.remove();
@@ -511,31 +579,37 @@ const ICONS={
 const CHEV='<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3l6 5-6 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
 function delBtn(kind,id){const k=kind+id;return `<button class="ghost ${armed===k?'warn':''}" data-act="del" data-kind="${kind}" data-id="${id}">${armed===k?'削除する':'削除'}</button>`}
-let homeTab=(()=>{try{return localStorage.getItem('brew-home-tab')||'plan'}catch(e){return 'plan'}})();
 const fdate=d=>d?d.replace(/-/g,'/'):'—';
+const isList=()=>view.screen==='home'||view.screen==='plans'||view.screen==='brews';
 function homeHTML(){
-  const rs=[...db.recipes].sort((a,b)=>b.updated-a.updated);
-  const bs=[...db.brews].sort((a,b)=>(b.date||'').localeCompare(a.date||'')||b.updated-a.updated);
-  const tab=(k,l,c)=>`<button role="tab" aria-selected="${homeTab===k}" class="${homeTab===k?'on':''}" data-act="htab" data-v="${k}">${l}<span class="cnt">${c}</span></button>`;
-  let body;
-  if(homeTab==='plan'){
-    body=`<section class="hsec"><div class="label">新しいレシピを作る</div>
-    <div class="methods">${Object.entries(STYLES).map(([k,s])=>`<button class="method" data-act="new" data-style="${k}">${ICONS[k]}<div><b>${s.name}</b><span>${s.desc}</span></div><i>›</i></button>`).join('')}</div></section>
-    <section class="hsec"><div class="label">レシピ</div>
-    ${rs.length?`<div class="saved">${rs.map(r=>{const m=track(r.steps,false).meta,nb=db.brews.filter(b=>b.rid===r.id).length;
-      return `<div class="saved-row"><button class="open" data-act="open" data-kind="r" data-id="${r.id}"><b>${esc(r.name||'無題のレシピ')}</b><span><span class="chip">${STYLES[r.style].name}</span>${m.og!=null?` <span class="num">OG ${fsg(m.og)}</span>`:''}${m.abv!=null?` · <span class="num">${m.abv.toFixed(1)}%</span>`:''}${m.ibu!=null?` · <span class="num">${Math.round(m.ibu)} IBU</span>`:''}${nb?` · 醸造 ${nb} 回`:''}</span></button>${delBtn('r',r.id)}</div>`}).join('')}</div>`
-    :'<p class="empty-note">まだありません。上の方式を選ぶと作成されます。</p>'}</section>`;
-  }else{
-    body=`<button class="primary" data-act="pickRecipe" ${rs.length?'':'disabled'}>＋ レシピを選んで醸造を始める</button>
-    ${rs.length?'':'<p class="hint">先に「計画」でレシピを作ってください。</p>'}
-    <section class="hsec"><div class="label">醸造の記録</div>
-    ${bs.length?`<div class="saved">${bs.map(b=>{const m=track(b.steps,true).meta,dn=b.steps.filter(s=>s.done).length,all=dn===b.steps.length&&dn;
-      const st=b.finDate?'<span class="chip hop">完成</span>':all?'<span class="chip hop">全工程完了</span>':`<span class="chip plain">${dn}/${b.steps.length} 工程</span>`;
-      return `<div class="saved-row"><button class="open" data-act="open" data-kind="b" data-id="${b.id}"><b>${esc(b.name||'無題の醸造')}</b><span>${st} 醸造 <span class="num">${fdate(b.date)}</span> → ${b.finDate?'完成':'完成予定'} <span class="num">${fdate(b.finDate||b.doneDate)}</span>${m.abv!=null?` · <span class="num">${m.abv.toFixed(1)}%</span>`:''}</span></button>${delBtn('b',b.id)}</div>`}).join('')}</div>`
-    :'<p class="empty-note">まだありません。上のボタンからレシピを選ぶと、醸造の記録が始まります。</p>'}</section>`;
-  }
+  if(view.screen==='plans')return plansHTML();
+  if(view.screen==='brews')return brewsHTML();
+  const nr=db.recipes.length,nb=db.brews.length,act=db.brews.filter(b=>!b.finDate).length;
   return `<header class="brand"><h1>ビール仕込みノート</h1><p>計画でレシピを作り、醸造でそのレシピを使って記録します。</p></header>
-  <div class="htabs" role="tablist">${tab('plan','計画',rs.length)}${tab('brew','醸造',bs.length)}</div>${body}`;
+  <section class="hsec"><div class="label">新しいレシピを作る</div>
+  <div class="methods">${Object.entries(STYLES).map(([k,s])=>`<button class="method" data-act="new" data-style="${k}">${ICONS[k]}<div><b>${s.name}</b><span>${s.desc}</span></div><i>›</i></button>`).join('')}</div></section>
+  <div class="tiles">
+    <button class="tile t-plan" data-act="goList" data-v="plans"><span class="tl">計画</span><span class="tn num">${nr}<small> レシピ</small></span><span class="td">作ったレシピを確認・編集する</span></button>
+    <button class="tile t-brew" data-act="goList" data-v="brews"><span class="tl">醸造</span><span class="tn num">${nb}<small> 回</small></span><span class="td">${act?`進行中 ${act} 件。`:''}レシピを使って醸造し、記録する</span></button>
+  </div>`;
+}
+function listTop(t){return `<div class="topbar"><button class="back" data-act="back" aria-label="戻る">‹</button><div class="namebox"><b class="ltitle">${t}</b></div></div>`}
+function plansHTML(){
+  const rs=[...db.recipes].sort((a,b)=>b.updated-a.updated);
+  return `${listTop('計画')}<p class="hint">レシピを押すと、確認・編集できます。新しいレシピはホームの「新しいレシピを作る」から作ります。</p>
+  ${rs.length?`<div class="saved">${rs.map(r=>{const m=track(r.steps,false).meta,nb=db.brews.filter(b=>b.rid===r.id).length;
+    return `<div class="saved-row"><button class="open" data-act="open" data-kind="r" data-id="${r.id}"><b>${esc(r.name||'無題のレシピ')}</b><span><span class="chip">${STYLES[r.style].name}</span>${m.og!=null?` <span class="num">OG ${fsg(m.og)}</span>`:''}${m.abv!=null?` · <span class="num">${m.abv.toFixed(1)}%</span>`:''}${m.ibu!=null?` · <span class="num">${Math.round(m.ibu)} IBU</span>`:''}${nb?` · 醸造 ${nb} 回`:''}</span></button>${delBtn('r',r.id)}</div>`}).join('')}</div>`
+  :'<p class="empty-note">まだレシピがありません。ホームの「新しいレシピを作る」から作れます。</p>'}`;
+}
+function brewsHTML(){
+  const rs=db.recipes,bs=[...db.brews].sort((a,b)=>(b.date||'').localeCompare(a.date||'')||b.updated-a.updated);
+  return `${listTop('醸造')}<button class="primary" data-act="pickRecipe" ${rs.length?'':'disabled'}>＋ レシピを選んで醸造を始める</button>
+  ${rs.length?'':'<p class="hint">先に「計画」でレシピを作ってください。</p>'}
+  <section class="hsec"><div class="label">醸造の記録</div>
+  ${bs.length?`<div class="saved">${bs.map(b=>{const m=track(b.steps,true).meta,dn=b.steps.filter(s=>s.done).length,all=dn===b.steps.length&&dn;
+    const st=b.finDate?'<span class="chip hop">完成</span>':all?'<span class="chip hop">全工程完了</span>':`<span class="chip plain">${dn}/${b.steps.length} 工程</span>`;
+    return `<div class="saved-row"><button class="open" data-act="open" data-kind="b" data-id="${b.id}"><b>${esc(b.name||'無題の醸造')}</b><span>${st} 醸造 <span class="num">${fdate(b.date)}</span> → ${b.finDate?'完成':'完成予定'} <span class="num">${fdate(b.finDate||b.doneDate)}</span>${m.abv!=null?` · <span class="num">${m.abv.toFixed(1)}%</span>`:''}</span></button>${delBtn('b',b.id)}</div>`}).join('')}</div>`
+  :'<p class="empty-note">まだありません。上のボタンからレシピを選ぶと、醸造の記録が始まります。</p>'}</section>`;
 }
 function pickHTML(){
   const rs=[...db.recipes].sort((a,b)=>b.updated-a.updated);
@@ -668,10 +742,11 @@ function stepHTML(r,s,i,t,p,first,last){
   if(s.open){
     h+=`<div class="step-body">`;
     if(s.type==='custom')h+=`<div class="field"><label for="${s.id}-title">工程名</label><div class="inp"><input id="${s.id}-title" type="text" data-f="${s.id}|title" value="${esc(s.title)}" placeholder="例：ホップスタンド"></div></div>`;
-    if(ty.fields&&ty.fields.length)h+=`<div class="fields">${ty.fields.map(f=>inputHTML(s.id,'p',f,s.p[f.k])).join('')}</div>`;
+    if(s.type==='water')h+=waterBody(s);
+    else if(ty.fields&&ty.fields.length)h+=`<div class="fields">${ty.fields.map(f=>inputHTML(s.id,'p',f,s.p[f.k])).join('')}</div>`;
     if(s.type==='mash')h+=mashBody(s,t);
     if(s.type==='yeast')h+=yeastBody(s);
-    if(ty.list)h+=listHTML(s,ty.list);
+    if(ty.list&&s.type!=='water')h+=listHTML(s,ty.list);
     if(s.hops)h+=hopsHTML(s);
     if(ty.hint)h+=`<p class="hint">${ty.hint}</p>`;
     if(s.type==='dilute'||s.type==='trub')h+=`<div id="help-${s.id}">${diluteHelp(s,t)}</div>`;
@@ -684,7 +759,46 @@ function stepHTML(r,s,i,t,p,first,last){
   h+=`<div class="after" id="after-${s.id}">${s.type==='water'?phHTML(s,brew,p):afterHTML(t,p,brew)}</div></article>`;
   return h;
 }
+function waterBody(s){
+  const sk=!!s.p.skip;
+  let h=`<div class="fields">${inputHTML(s.id,'p',{k:'vol',l:'水量',u:'L'},s.p.vol)}${sk?'':inputHTML(s.id,'p',{k:'ph',l:'目標pH',u:'pH',step:'0.01'},s.p.ph)}</div>
+  <div class="skiprow"><span class="label">pH調整</span><button class="skipbtn ${sk?'on':''}" data-act="wskip" data-id="${s.id}" aria-pressed="${sk}">${sk?'省略中（押すと調整する）':'省略する'}</button></div>`;
+  if(sk)return h+`<p class="hint">pH調整を省略しています。水のpHは 7 として、マッシングの効率を計算します。</p>`;
+  h+=`<div class="fields">${inputHTML(s.id,'p',{k:'ph0',l:'原水のpH',u:'pH',step:'0.01'},s.p.ph0)}${inputHTML(s.id,'p',{k:'alk',l:'原水のアルカリ度',u:'mg/L'},s.p.alk)}</div>
+  <p class="hint">アルカリ度（炭酸カルシウム換算）は水道局の水質データに載っています。わからなければ 40 のままで構いません。</p>
+  <div class="listed"><span class="label">添加剤</span><div id="wadd-${s.id}">${waterAddHTML(s)}</div>
+  <button class="addrow" data-act="addItem" data-g="list" data-id="${s.id}">＋ 添加剤を追加</button></div>`;
+  return h;
+}
+function waterAddHTML(s){
+  const w=waterCalc(s);
+  const rows=w.rows.map(r=>{
+    const it=r.it,base=`${s.id}|list|${r.j}`,custom=it.cat==='custom',unit=it.unit||'g';
+    let need='';
+    if(r.f>0&&w.N!=null)need=r.need<0.005?`<span class="need ok">目標に達しています</span>`:`<span class="need">目標pHに必要 <b class="num">${r.need.toFixed(unit==='ml'?2:1)} ${unit}</b>${r.capped?`（150ppmの上限。これだけでは足りません）`:''}</span>`;
+    else if(r.f<0)need=`<span class="need warn">pHを上げる添加剤です</span>`;
+    else if(it.cat&&!custom&&r.f===0)need=`<span class="need">pHにはほぼ影響しません</span>`;
+    const over=r.over?`<span class="need warn">150ppm（${(CACL2_MAX*w.V/1000).toFixed(1)} g）を超えています</span>`:'';
+    return `<div class="irow"><div class="irow-top"><div class="inp sel">${catSelect('add',base,it.cat)}</div><button class="icon" data-act="delItem" data-g="list" data-id="${s.id}" data-j="${r.j}" aria-label="行を削除">✕</button></div>
+      ${custom?`<div class="inp"><input type="text" id="${base.replace(/\|/g,'-')}-name" aria-label="名前" data-f="${base}|name" value="${esc(it.name)}" placeholder="名前を入力"></div>`:''}
+      <div class="irow-nums two"><div class="inp">${numIn(base,'amt',it.amt,r.need!=null&&r.need>0.005?r.need.toFixed(unit==='ml'?2:1):'','量')}<u>${unit}</u></div><div class="needbox">${need}${over}</div></div></div>`;
+  }).join('');
+  let sum='';
+  if(!w.V)sum=`<p class="hint">水量を入れると、目標pHに必要な添加量を計算します。</p>`;
+  else if(w.tg==null)sum=`<p class="hint">目標pHを入れると、必要な添加量を計算します。</p>`;
+  else{
+    const ach=w.ach!=null?w.ach:w.ph0;
+    sum=`<div class="calc"><div>目標 pH <span class="num">${w.tg.toFixed(2)}</span> に必要な酸 <span class="num">${w.N.toFixed(1)} mEq</span>（原水 pH ${w.ph0}・アルカリ度 ${w.alk} mg/L・${w.V} L）</div>
+      <div class="calc-res">入力した量での推定 pH <b class="num">${ach.toFixed(2)}</b>${w.over?' <span class="need warn">目標より下がりすぎます</span>':''}</div>
+      <div class="muted">どれか1つに量を入れると、残りの添加剤の「目標pHに必要」な量が、その分を引いた量に変わります。カルシウムの効果はマッシュ中で効く分を酸に換算しています。</div></div>`;
+  }
+  return rows+sum;
+}
 function phHTML(s,brew,pp){
+  const w=waterPH(s,brew),mp=mashPH(w.ph),f=phFactor(mp);
+  return `<span class="muted">水のpH</span><span class="num">${w.ph.toFixed(2)}</span><span class="chip ${w.how==='実測'?'hop':'plain'}">${w.how}</span><span class="muted">マッシュpH</span><span class="num">${mp.toFixed(2)}</span>${f<1?`<span class="chip">効率 −${Math.round((1-f)*100)}%</span>`:''}`;
+}
+function phHTML_old(s,brew,pp){
   const p0=n(s.p.ph0),p1=n(s.p.ph),pm=brew?n(s.meas.ph):null;
   if(p0==null&&p1==null&&pm==null)return `<span class="muted">pH：未入力</span>`;
   return `<span class="muted">pH</span><span class="num">${p0!=null?p0.toFixed(2):'—'}</span><span class="muted">→</span><span class="num">${pm!=null?pm.toFixed(2):p1!=null?p1.toFixed(2):'—'}</span>${pm!=null?'<span class="chip hop">実測</span>':p1!=null?'<span class="chip plain">目標</span>':''}${brew&&pm!=null&&p1!=null?`<span class="muted plan-v">目標 <span class="num">${p1.toFixed(2)}</span></span>`:''}`;
@@ -745,7 +859,7 @@ function calcInfo(t){
   }
   if(!i.kg)return `<p class="hint">この工程より前の「モルト投入」にモルトの量を入れると、麦汁の比重を計算します。</p>`;
   if(!i.V)return `<p class="hint">「得る麦汁量」を入れると、その量の麦汁の比重を計算します。</p>`;
-  let h=`<div class="calc"><div>モルト <span class="num">${i.kg.toFixed(2)} kg</span> × 収率 → エキス最大 <span class="num">${i.pot.toFixed(2)} kg</span><br>× 糖化効率 <span class="num">${i.eff}%</span> = <b class="num">${i.E.toFixed(2)} kg</b> を <span class="num">${fv(i.V)} L</span> の麦汁に</div><div class="calc-res">→ <b class="num">SG ${fsg(i.sg)}</b> <span class="num muted">${plato(i.sg).toFixed(1)}°P</span></div>`;
+  let h=`<div class="calc"><div>モルト <span class="num">${i.kg.toFixed(2)} kg</span> × 収率 → エキス最大 <span class="num">${i.pot.toFixed(2)} kg</span><br>× 糖化効率 <span class="num">${i.eff0}%</span>${i.fac<1?` × pH補正 <span class="num">${i.fac.toFixed(2)}</span>`:''} = <b class="num">${i.E.toFixed(2)} kg</b> を <span class="num">${fv(i.V)} L</span> の麦汁に</div><div class="calc-res">→ <b class="num">SG ${fsg(i.sg)}</b> <span class="num muted">${plato(i.sg).toFixed(1)}°P</span></div><div class="muted">推定マッシュpH <span class="num">${i.mp.toFixed(2)}</span>（水のpH ${i.wp.toFixed(2)}${i.noWater?'、水質調整の工程がないため7とみなす':''}）。${i.fac<1?`最適範囲 5.2〜5.5 から外れるため、効率を ${Math.round((1-i.fac)*100)}% 下げています。`:'最適範囲 5.2〜5.5 なので補正なし。'}</div>`;
   if(i.actEff!=null)h+=`<div class="act">実測（<span class="num">${fv(i.actVol)} L / ${fsg(i.actSg)}</span>${i.volGuessed?'、液量は予定値':''}）から求めた糖化効率 <b class="num">${i.actEff.toFixed(1)}%</b></div>`;
   return h+`</div>`;
 }
@@ -807,7 +921,8 @@ function refreshComputed(){
   const r=cur();if(!r)return;const brew=isBrew(),tr=track(r.steps,brew),pt=brew?planRows(r):null,pm=brew?track(r.plan||[],false).meta:null;
   document.getElementById('summary').innerHTML=summaryInner(r,tr,pt,pm);
   GROUPS.forEach(g=>{const e=document.getElementById('gsum-'+g);if(e)e.textContent=groupSummary(g,r,tr)});
-  r.steps.forEach((s,i)=>{const a=document.getElementById('after-'+s.id);if(a)a.innerHTML=afterHTML(tr[i],pt&&pt[s.id],brew);
+  r.steps.forEach((s,i)=>{const a=document.getElementById('after-'+s.id);if(a)a.innerHTML=s.type==='water'?phHTML(s,brew):afterHTML(tr[i],pt&&pt[s.id],brew);
+    if(s.type==='water'){const wa=document.getElementById('wadd-'+s.id);if(wa){const fe=document.activeElement,fid=fe&&fe.id,pos=fe&&fe.selectionStart;wa.innerHTML=waterAddHTML(s);if(fid){const ne=document.getElementById(fid);if(ne&&ne!==fe){ne.focus();try{ne.setSelectionRange(pos,pos)}catch(e){}}}}}
     const h=document.getElementById('help-'+s.id);if(h)h.innerHTML=diluteHelp(s,tr[i]);
     const c=document.getElementById('info-'+s.id);if(c)c.innerHTML=calcInfo(tr[i])});
 }
@@ -843,14 +958,15 @@ document.addEventListener('change',onInput);
 document.addEventListener('click',e=>{
   const b=e.target.closest('[data-act]');if(!b)return;
   if(b.classList.contains('scrim')&&e.target!==b)return;
-  const a=b.dataset.act,id=b.dataset.id,r=view.screen==='home'?null:cur();
+  const a=b.dataset.act,id=b.dataset.id,r=isList()?null:cur();
   const prevArmed=armed;armed=null;
   const idx=r?r.steps.findIndex(s=>s.id===id):-1;
   switch(a){
     case 'back':if(sheet||stack.length)history.back();return;
-    case 'htab':homeTab=b.dataset.v;try{localStorage.setItem('brew-home-tab',homeTab)}catch(e){}break;
+    case 'goList':go({screen:b.dataset.v,id:null});break;
     case 'pickRecipe':sheet='pick';history.pushState({app:1},'');break;
-    case 'brewFrom':{const rr=db.recipes.find(x=>x.id===id);if(!rr)break;sheet=false;history.replaceState({app:1},'');const nb=startBrew(rr);db.brews.push(nb);homeTab='brew';try{localStorage.setItem('brew-home-tab','brew')}catch(e){}stack.push(view);view={screen:'brew',id:nb.id};window.scrollTo(0,0);save();break}
+    case 'brewFrom':{const rr=db.recipes.find(x=>x.id===id);if(!rr)break;sheet=false;history.replaceState({app:1},'');const nb=startBrew(rr);db.brews.push(nb);stack.push(view);view={screen:'brew',id:nb.id};window.scrollTo(0,0);save();break}
+    case 'wskip':r.steps[idx].p.skip=!r.steps[idx].p.skip;touch();break;
     case 'gravToggle':r.showGrav=!r.showGrav;save();break;
     case 'gtoggle':{const g=b.dataset.g;r.collapsed=r.collapsed||{};r.collapsed[g]=!r.collapsed[g];save();break}
     case 'exitNo':closeExit(true);return;
@@ -858,7 +974,7 @@ document.addEventListener('click',e=>{
     case 'new':{const st=b.dataset.style,nr={id:uid(),name:'',style:st,updated:Date.now(),steps:['water',st==='extract'?'dissolve':'malt'].map(k=>mkStep(k,st))};db.recipes.push(nr);go({screen:'recipe',id:nr.id});save();break}
     case 'open':go({screen:b.dataset.kind==='b'?'brew':'recipe',id});break;
     case 'del':{const k=b.dataset.kind;if(prevArmed===k+id){if(k==='r')db.recipes=db.recipes.filter(x=>x.id!==id);else db.brews=db.brews.filter(x=>x.id!==id);save()}else armed=k+id;break}
-    case 'startBrew':{const nb=startBrew(r);db.brews.push(nb);homeTab='brew';try{localStorage.setItem('brew-home-tab','brew')}catch(e){}go({screen:'brew',id:nb.id});save();break}
+    case 'startBrew':{const nb=startBrew(r);db.brews.push(nb);go({screen:'brew',id:nb.id});save();break}
     case 'tpl':{const have=new Set(r.steps.map(x=>x.type));STYLES[r.style].tpl.filter(k=>!have.has(k)).forEach(k=>{const s=mkStep(k,r.style);s.open=false;r.steps.push(s)});sortSteps(r.steps);r.collapsed={};touch();break}
     case 'sheet':sheet=b.dataset.g||'brew';history.pushState({app:1},'');break;
     case 'close':if(sheet)history.back();return;
