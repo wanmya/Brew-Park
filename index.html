@@ -232,6 +232,9 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .need b{color:var(--accent)}
 .need.ok{color:var(--hop)}
 .need.warn{color:var(--danger)}
+.fbar{height:6px;border-radius:99px;background:var(--line);overflow:hidden}
+.fbar i{display:block;height:100%;background:var(--g3)}
+.today{border:1px solid var(--g3);background:var(--surface);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;font-size:.9rem}
 .addrow{align-self:flex-start;background:none;border:1px dashed var(--line);border-radius:8px;padding:5px 12px;font-size:.85rem;color:var(--accent)}
 .meas{border-top:1px dashed var(--line);padding-top:10px;display:flex;flex-direction:column;gap:6px}
 .meas-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
@@ -506,6 +509,23 @@ function carbBody(s){
   <div class="fields">${inputHTML(s.id,'p',{k:'vols',l:'目標ガスボリューム',u:'vol'},s.p.vols)}${inputHTML(s.id,'p',{k:'temp',l:pr?'発酵中の最高温度':'ビールの温度',u:'℃'},s.p.temp)}${inputHTML(s.id,'p',{k:'days',l:'日数',u:'日'},s.p.days)}</div>
   <p class="hint">ガスボリュームの目安：ラガー・ピルスナー 2.4〜2.7、エール 2.0〜2.4、ヴァイツェン 3.0〜4.0、スタウト 1.8〜2.2。</p>`;
 }
+/* 発酵の進み具合の推定
+   酵母ごとの適温（ラガー 9〜15℃、エール 15〜24℃ など）と、適温での「半分まで進む日数」を基準にする。
+   温度が10℃上がるごとに速さ2倍（下がると半分）。適温より低すぎるとさらに遅くなる（3℃ごとに半分）。
+   各工程の「温度×日数」を、適温での日数に換算して積み上げる（実効日数 τ）。
+   進み具合 p = 1 ÷ (1 + (半分日数 ÷ τ)^3)。比重 = 1 + (OG−1)×(1 − 発酵度×p)。
+   記録モードで比重を実測すると、その時点の進み具合から計算し直す */
+const FERMSTEPS=['ferment1','diacetyl','ferment2','dryhop','crash','lagering'];
+function yeastProfile(cat,name){
+  const id=cat||'',nm=(name||'').toLowerCase();
+  if(['w3470','s23','s189','e30','p15lag','eu15'].includes(id)||/lager|ラガー|w-?34|s-?23|s-?189|e-?30/.test(nm))return {type:'ラガー酵母',opt:12,lo:9,hi:15,half:4};
+  if(id==='be134'||/saison|セゾン|be-?134/.test(nm))return {type:'セゾン酵母',opt:24,lo:18,hi:28,half:2.5};
+  if(['wb06','w68','bw20','wh15'].includes(id)||/wheat|ウィート|wb-?06|w-?68/.test(nm))return {type:'ウィート酵母',opt:20,lo:17,hi:24,half:2};
+  return {type:'エール酵母',opt:19,lo:15,hi:24,half:2};
+}
+function fermRate(T,pr){let k=Math.pow(2,(T-pr.opt)/10);if(T<pr.lo)k*=Math.pow(0.5,(pr.lo-T)/3);return k}
+const fermP=(tau,half)=>tau<=0?0:1/(1+Math.pow(half/tau,3));
+const fermTau=(p,half)=>p<=0?0:p>=0.999?half*10:half/Math.pow(1/p-1,1/3);
 function solveSG(E,V){let lo=1,hi=1.2;for(let k=0;k<60;k++){const m=(lo+hi)/2;if(V*m*plato(m)/100<E)lo=m;else hi=m}return (lo+hi)/2}
 /* IBU（Tinseth式）：利用率 = 1.65×0.000125^(平均比重−1) × (1−e^(−0.04×煮沸分))/4.15。
    IBU = 利用率 × α酸(%)/100 × ホップ(g) × 1000 ÷ ボイル後の液量(L)。平均比重はボイル前後の平均。
@@ -513,7 +533,7 @@ function solveSG(E,V){let lo=1,hi=1.2;for(let k=0;k<60;k++){const m=(lo+hi)/2;if
    加水すると IBU は薄まる。度数 ABV = (OG − FG) × 131.25。FG = 1 + (OG−1)×(1−発酵度)。
    プライミングの砂糖 1 g/L で約 0.065% 上がる */
 function track(steps,useMeas){
-  let wph=null,vol=null,sg=null,water=0,kg=0,pot=0,ibu=null,att=null,yeastName='',og=null,fermented=false,prime=0,fgMeas=false;const out=[];
+  let wph=null,ycat='',tau=0,prof=null,vol=null,sg=null,water=0,kg=0,pot=0,ibu=null,att=null,yeastName='',og=null,fermented=false,prime=0,fgMeas=false;const out=[];
   for(let si=0;si<steps.length;si++){const s=steps[si];
     const before={vol,sg};let changed=false,info=null;
     if(s.type==='water'||s.type==='heat')water+=n(s.p.vol)||0;
@@ -545,8 +565,14 @@ function track(steps,useMeas){
     if(s.type==='trub'){const l=n(s.p.loss);if(l&&vol!=null){vol=Math.max(0,vol-l);changed=true}
       dbase={vol,sg};const a=n(s.p.add);if(a&&vol!=null){if(sg!=null)sg=1+(sg-1)*vol/(vol+a);if(ibu!=null)ibu*=vol/(vol+a);vol+=a;changed=true}}
     if(s.type==='dilute'){const a=n(s.p.add);if(a&&vol!=null){if(sg!=null)sg=1+(sg-1)*vol/(vol+a);if(ibu!=null)ibu*=vol/(vol+a);vol+=a;changed=true}}
-    if(s.type==='yeast'){att=n(s.p.atten)??DEF.att;yeastName=s.p.name||''}
-    if(s.type==='ferment1'&&!fermented&&sg!=null){og=sg;const a=att??DEF.att;sg=1+(og-1)*(1-a/100);fermented=true;changed=true;info={kind:'ferment',og,att:a,assumed:att==null,yeast:yeastName}}
+    if(s.type==='yeast'){att=n(s.p.atten)??DEF.att;yeastName=s.p.name||'';ycat=s.p.cat||''}
+    if(FERMSTEPS.includes(s.type)&&sg!=null&&(fermented||s.type==='ferment1')){
+      if(!fermented){og=sg;fermented=true;prof=yeastProfile(ycat,yeastName)}
+      const a=att??DEF.att,T=n(s.p.temp),d=n(s.p.days)||0;
+      const k=T!=null?fermRate(T,prof):1;tau+=d*k;const pp=fermP(tau,prof.half);
+      sg=1+(og-1)*(1-a/100*pp);changed=true;
+      info={kind:'ferment',og,att:a,assumed:att==null,yeast:yeastName,prof,T,d,k,p:pp,tau,full:1+(og-1)*(1-a/100)};
+    }
     if(s.type==='bottle'&&fermented){prime=n(s.p.sugar)||0;info={kind:'bottle',prime}}
     if(s.type==='carbonation'){const c=carbCalc(s,vol);info={kind:'carb',...c};if(fermented&&c.sugar!=null&&s.p.cmethod==='priming'){prime+=c.sugar;info.prime=c.sugar}}
     let src=changed?'calc':null;
@@ -555,15 +581,16 @@ function track(steps,useMeas){
       if(mv!=null){vol=mv;src='meas'}
       if(ms!=null){sg=ms;src='meas'}
       if(s.type==='mash'&&info&&pot>0&&(mv!=null||ms!=null)&&vol!=null&&sg!=null){info.actEff=vol*sg*plato(sg)/100/pot*100;info.actVol=vol;info.actSg=sg;info.volGuessed=mv==null}
-      if(fermented&&ms!=null)fgMeas=true;
+      if(fermented&&ms!=null){fgMeas=true;const a=att??DEF.att,pm=Math.min(1,Math.max(0,(og-ms)/((og-1)*a/100)));tau=fermTau(pm,prof.half);if(info&&info.kind==='ferment')info.p=pm}
     }
     const abv=fermented&&og!=null&&sg!=null?(og-sg)*131.25+prime*0.0646:null;
     if(info&&info.kind==='ferment'){info.fg=sg;info.abv=(og-sg)*131.25;info.meas=src==='meas'}
+    const fp=fermented&&prof?fermP(tau,prof.half):null;
     if(info&&info.kind==='carb'&&info.prime){info.abv=abv}
     if(info&&info.kind==='bottle'){info.abv=abv;info.base=abv!=null?abv-prime*0.0646:null}
-    out.push({before,dbase:dbase||before,vol,sg,src,info,ibu,abv});
+    out.push({before,dbase:dbase||before,vol,sg,src,info,ibu,abv,fp});
   }
-  let m={vol:null,og,fg:null,abv:null,ibu,fgMeas,prime,predicted:!fermented};
+  let m={vol:null,og,fg:null,abv:null,ibu,fgMeas,prime,predicted:!fermented,prof,att:att??DEF.att,fullFg:og!=null?1+(og-1)*(1-(att??DEF.att)/100):null};
   const last=[...out].reverse().find(x=>x.vol!=null||x.sg!=null);if(last)m.vol=last.vol;
   if(fermented){m.fg=out[out.length-1].sg;m.abv=out[out.length-1].abv}
   else{const lsg=[...out].reverse().find(x=>x.sg!=null);if(lsg){m.og=lsg.sg;const a=att??DEF.att;m.fg=1+(m.og-1)*(1-a/100);m.abv=(m.og-m.fg)*131.25}}
@@ -684,6 +711,13 @@ function editorHTML(){
   ${onlyDefaults?`<div class="empty-steps"><p>${STYLES[r.style].name}の標準的な工程をまとめて入れるか、下の各項目から1つずつ追加できます。</p><button class="secondary" data-act="tpl">標準の工程をまとめて追加</button></div>`:''}
   <div class="groups">${GROUPS.map(g=>groupHTML(r,g,tr,pt)).join('')}</div>`;
 }
+function todayHTML(r,tr){
+  const e=todayEst(r,tr);if(!e)return '';
+  if(e.before)return `<div class="today"><b>醸造日まであと ${-e.day} 日</b></div>`;
+  if(e.p==null)return `<div class="today">醸造から <b>${e.day} 日目</b></div>`;
+  return `<div class="today"><div>今日は醸造から <b class="num">${e.day} 日目</b>${e.cur?`（${esc(e.cur.name)} ${e.cur.inDay}/${e.cur.of} 日）`:'（発酵・熟成の予定日数を過ぎています）'}</div>
+    <div>今日の推定：発酵 <b class="num">${Math.round(e.p*100)}%</b>・SG <b class="num">${fsg(e.sg)}</b>・度数 <b class="num">${e.abv.toFixed(1)}%</b></div><div class="fbar"><i style="width:${Math.min(100,Math.round(e.p*100))}%"></i></div></div>`;
+}
 function groupSummary(g,r,tr){
   const idx=r.steps.map((s,i)=>gOf(s)===g?i:-1).filter(i=>i>=0);
   if(!idx.length)return '工程なし';
@@ -694,13 +728,28 @@ function groupSummary(g,r,tr){
   if(isBrew()){const dn=idx.filter(i=>r.steps[i].done).length;bits.push(dn===idx.length?'完了':`${dn}/${idx.length} 完了`)}
   return bits.join(' · ');
 }
+function todayEst(r,tr){
+  if(!isBrew()||!r.date)return null;
+  const t0=new Date(r.date+'T00:00:00');if(isNaN(t0))return null;
+  const now=new Date();now.setHours(0,0,0,0);const day=Math.round((now-t0)/864e5);if(day<0)return {day,before:true};
+  const m=tr.meta;if(!m.prof||m.og==null)return {day};
+  // 仕込み日の作業後から発酵が始まるとみなし、発酵の工程の日数を順にたどる
+  let left=day,tau=0,cur=null,a=m.att;
+  for(let i=0;i<r.steps.length;i++){const s=r.steps[i];if(!FERMSTEPS.includes(s.type))continue;
+    const d=n(s.p.days)||0,T=n(s.p.temp),k=T!=null?fermRate(T,m.prof):1;
+    const ms=n(s.meas&&s.meas.sg);
+    if(left<=d){tau+=left*k;cur={name:stepName(s),inDay:left,of:d};break}
+    tau+=d*k;left-=d;if(ms!=null){const pm=Math.min(1,Math.max(0,(m.og-ms)/((m.og-1)*a/100)));tau=fermTau(pm,m.prof.half)}}
+  const p=fermP(tau,m.prof.half),sg=1+(m.og-1)*(1-a/100*p);
+  return {day,cur,p,sg,abv:(m.og-sg)*131.25};
+}
 function groupHTML(r,g,tr,pt){
   r.collapsed=r.collapsed||{};const closed=!!r.collapsed[g];
   const items=r.steps.map((s,i)=>[s,i]).filter(([s])=>gOf(s)===g);
   const no={mash:'1',brew:'2',ferm:'3'}[g];
   return `<section class="group g-${g} ${closed?'':'is-open'}" id="grp-${g}">
     <button class="group-head" data-act="gtoggle" data-g="${g}" aria-expanded="${!closed}">${CHEV}<span class="gno">${no}</span><span class="gt"><b>${gName(g,r.style)}</b><span id="gsum-${g}">${esc(groupSummary(g,r,tr))}</span></span></button>
-    ${closed?'':`<div class="group-body">${items.length?`<div class="steps">${items.map(([s,i],k)=>stepHTML(r,s,i,tr[i],pt&&pt[s.id],k===0,k===items.length-1)).join('')}</div>`:'<p class="hint">この項目の工程はまだありません。</p>'}
+    ${closed?'':`<div class="group-body">${g==='ferm'?todayHTML(r,tr):''}${items.length?`<div class="steps">${items.map(([s,i],k)=>stepHTML(r,s,i,tr[i],pt&&pt[s.id],k===0,k===items.length-1)).join('')}</div>`:'<p class="hint">この項目の工程はまだありません。</p>'}
       <button class="addstep" data-act="sheet" data-g="${g}">＋ ${g==='mash'?(r.style==='extract'?'準備':'マッシング'):g==='brew'?'仕込み':'発酵・熟成'}の工程を追加</button></div>`}
   </section>`;
 }
@@ -784,7 +833,7 @@ function stepHTML(r,s,i,t,p,first,last){
     if(s.hops)h+=hopsHTML(s);
     if(ty.hint)h+=`<p class="hint">${ty.hint}</p>`;
     if(s.type==='dilute'||s.type==='trub')h+=`<div id="help-${s.id}">${diluteHelp(s,t)}</div>`;
-    if(['mash','dissolve','boil','ferment1','bottle','carbonation'].includes(s.type))h+=`<div id="info-${s.id}">${calcInfo(t)}</div>`;
+    if(['mash','dissolve','boil','bottle','carbonation',...FERMSTEPS].includes(s.type))h+=`<div id="info-${s.id}">${calcInfo(t)}</div>`;
     if(s.type==='cool'){const bo=r.steps.slice(0,i).reverse().find(x=>x.type==='boil');if(bo&&bo.hops&&bo.hops.length)h+=`<p class="hint">ホップは${bo.p.hopOut==='after'?'この冷却の<b>後</b>':'この冷却の<b>前</b>'}に取り出す設定です（ボイルの工程で変更できます）。</p>`}
     if(brew)h+=`<div class="meas"><div class="meas-head"><span class="label">${s.type==='water'?'調整後の実測':'この工程後の実測'}</span><span class="hint">わかる時だけ</span></div>
       <div class="fields">${s.type==='water'?inputHTML(s.id,'meas',{k:'ph',l:'pH',u:'pH',step:'0.01'},s.meas.ph||''):inputHTML(s.id,'meas',{k:'vol',l:'液量',u:'L'},s.meas.vol)+inputHTML(s.id,'meas',{k:'sg',l:'比重',u:'SG',step:'0.001'},s.meas.sg)}</div></div>`;
@@ -876,7 +925,8 @@ function afterHTML(t,p,brew){
   const plan=brew&&p&&p.sg!=null?`<span class="muted plan-v">予定 <span class="num">${fsg(p.sg)}</span></span>`:'';
   if(t.vol==null&&t.sg==null)return `<span class="muted">工程後の液量・比重：まだ計算できません</span>${plan}`;
   const chip=t.src==='meas'?'<span class="chip hop">実測</span>':t.src==='calc'?'<span class="chip">計算</span>':'<span class="chip plain">前工程のまま</span>';
-  return `<span class="muted">工程後</span><span class="num">${fv(t.vol)} L</span><span class="num">SG ${fsg(t.sg)}</span>${t.sg!=null?`<span class="num muted">${plato(t.sg).toFixed(1)}°P</span>`:''}${chip}${plan}`;
+  const fx=t.fp!=null?`<span class="num">${t.abv!=null?t.abv.toFixed(1)+'%':''}</span><span class="muted">発酵 ${Math.round(t.fp*100)}%</span>`:'';
+  return `<span class="muted">工程後</span><span class="num">${fv(t.vol)} L</span><span class="num">SG ${fsg(t.sg)}</span>${t.sg!=null&&t.fp==null?`<span class="num muted">${plato(t.sg).toFixed(1)}°P</span>`:''}${fx}${chip}${plan}`;
 }
 function calcInfo(t){
   const i=t.info;if(!i)return '';
@@ -890,7 +940,14 @@ function calcInfo(t){
     return `<div class="calc"><div>${i.rows.map(r=>`${esc(r.name)} <span class="num">${r.g} g・α${r.a}%・${r.t}分</span> → <b class="num">${r.ibu.toFixed(1)}</b>`).join('<br>')}</div><div class="calc-res">→ 合計 <b class="num">${Math.round(i.tot)} IBU</b></div><div class="muted">ボイル後 <span class="num">${fv(i.V)} L</span>・平均比重 <span class="num">${fsg(i.G)}</span>${i.assumed?'（比重がわからないため1.050と仮定）':''}で計算。${i.extra?`冷却後に取り出すので、冷却中に出る苦味として各ホップに約 ${i.extra.toFixed(0)} 分を足しています。`:''}</div></div>`;
   }
   if(i.kind==='ferment'){
-    return `<div class="calc"><div>OG <span class="num">${fsg(i.og)}</span> × 発酵度 <span class="num">${i.att}%</span>${i.yeast?`（${esc(i.yeast)}）`:''}${i.assumed?'（酵母投入の工程がないため75%と仮定）':''}</div><div class="calc-res">→ FG <b class="num">${fsg(i.fg)}</b>${i.meas?'（実測）':''} → 度数 <b class="num">${i.abv.toFixed(1)}%</b></div></div>`;
+    const pr=i.prof,pc=Math.round(i.p*100);
+    let note='';
+    if(i.T!=null&&i.T<pr.lo)note=`${pr.type}の適温（${pr.lo}〜${pr.hi}℃）より低いので、発酵はかなりゆっくりです。`;
+    else if(i.T!=null&&i.T>pr.hi)note=`${pr.type}の適温（${pr.lo}〜${pr.hi}℃）より高いので速く進みますが、雑味が出やすくなります。`;
+    return `<div class="calc"><div>${esc(i.yeast||'酵母')}（${pr.type}・適温 ${pr.lo}〜${pr.hi}℃）${i.T!=null?` を <span class="num">${i.T}℃</span> で <span class="num">${i.d} 日</span>`:''}${i.assumed?'<br>酵母投入の工程がないため発酵度75%と仮定':''}</div>
+      <div class="calc-res">→ この工程の終わりで発酵 <b class="num">${pc}%</b>${i.meas?'（実測から）':''}：SG <b class="num">${fsg(i.fg)}</b>・度数 <b class="num">${i.abv.toFixed(1)}%</b></div>
+      <div class="fbar"><i style="width:${Math.min(100,pc)}%"></i></div>
+      <div class="muted">発酵しきった場合 SG ${fsg(i.full)}（発酵度 ${i.att}%）。${note}温度と日数からの推定なので、実際は比重を測って確かめてください。</div></div>`;
   }
   if(i.kind==='bottle'){
     if(i.abv==null)return '';
