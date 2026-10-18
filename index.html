@@ -32,16 +32,19 @@ body{-webkit-tap-highlight-color:transparent;overscroll-behavior-y:none}
   --bg:#eef0eb; --surface:#ffffff; --sunk:#f6f7f3; --ink:#1c221f; --muted:#5d6862; --line:#d9ded6;
   --accent:#a95b0c; --accent-soft:#f5e6d3; --accent-ink:#ffffff;
   --hop:#3b7234; --hop-soft:#e2eedd; --danger:#b23a2a;
+  --g1:#3f8a3a; --g1-soft:#e6f2e2; --g2:#b98a00; --g2-soft:#fbf1d2; --g3:#c0442f; --g3-soft:#f9e4df;
   --f-display:"Dela Gothic One","Zen Kaku Gothic New",sans-serif;
   --f-body:"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
   --f-num:"IBM Plex Mono",ui-monospace,Menlo,monospace;
   --r:12px;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --g1:#6fc066; --g1-soft:#1b2a19; --g2:#e7c04a; --g2-soft:#2c2614; --g3:#f07a62; --g3-soft:#311b16;
   --bg:#111513; --surface:#1a1f1c; --sunk:#151917; --ink:#e7ebe6; --muted:#9aa49e; --line:#2c3430;
   --accent:#e39a48; --accent-soft:#33261a; --accent-ink:#1a1209;
   --hop:#86c276; --hop-soft:#1f2d1d; --danger:#f0806e; color-scheme:dark}}
 :root[data-theme="dark"]{
+  --g1:#6fc066; --g1-soft:#1b2a19; --g2:#e7c04a; --g2-soft:#2c2614; --g3:#f07a62; --g3-soft:#311b16;
   --bg:#111513; --surface:#1a1f1c; --sunk:#151917; --ink:#e7ebe6; --muted:#9aa49e; --line:#2c3430;
   --accent:#e39a48; --accent-soft:#33261a; --accent-ink:#1a1209;
   --hop:#86c276; --hop-soft:#1f2d1d; --danger:#f0806e; color-scheme:dark}
@@ -190,6 +193,27 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .dlg-btns{display:flex;gap:10px;justify-content:flex-end;margin-top:6px}
 .ghost.big{padding:10px 18px;font-size:.95rem}
 .primary.small{width:auto;padding:10px 22px}
+.group.g-mash{--gc:var(--g1);--gs:var(--g1-soft)}
+.group.g-brew{--gc:var(--g2);--gs:var(--g2-soft)}
+.group.g-ferm{--gc:var(--g3);--gs:var(--g3-soft)}
+.group{border:2px solid var(--gc);background:var(--gs)}
+.group-head{background:var(--gs);box-shadow:inset 6px 0 0 var(--gc)}
+.group.is-open .group-head{border-bottom-color:var(--gc)}
+.gno{color:var(--gc)}
+.group.is-open>.group-head .chev{color:var(--gc)}
+.group .addstep{color:var(--gc);border-color:var(--gc)}
+.grav-toggle{display:flex;align-items:center;gap:8px;width:100%;background:none;border:0;border-top:1px solid var(--line);padding:10px 0 0;font-size:.88rem;font-weight:700;color:var(--muted);text-align:left}
+.grav-toggle.is-open .chev{transform:rotate(90deg);color:var(--accent)}
+.grav-body{display:flex;flex-direction:column;gap:12px}
+.htabs{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:12px;padding:4px;background:var(--surface);gap:4px}
+.htabs button{border:0;background:none;border-radius:9px;padding:10px;font-weight:700;font-size:1rem;color:var(--muted);display:flex;justify-content:center;align-items:center;gap:6px}
+.htabs button.on{background:var(--accent);color:var(--accent-ink)}
+.htabs .cnt{font-family:var(--f-num);font-size:.75rem;font-weight:500;opacity:.8}
+.primary:disabled{opacity:.45}
+.picks.one{grid-template-columns:1fr}
+.meta{grid-template-columns:repeat(3,minmax(0,1fr))!important;align-items:end}
+.meta-note{grid-column:1/-1}
+@media (max-width:420px){.meta{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
 .addrow{align-self:flex-start;background:none;border:1px dashed var(--line);border-radius:8px;padding:5px 12px;font-size:.85rem;color:var(--accent)}
 .meas{border-top:1px dashed var(--line);padding-top:10px;display:flex;flex-direction:column;gap:6px}
 .meas-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
@@ -304,7 +328,7 @@ function load(){
   try{const s=JSON.parse(localStorage.getItem(KEY));
     if(s&&Array.isArray(s.recipes)){s.brews=Array.isArray(s.brews)?s.brews:[];
       s.recipes.forEach(r=>{r.steps=fixSteps(r.steps)});
-      s.brews.forEach(b=>{b.steps=fixSteps(b.steps);b.plan=fixSteps(b.plan)});
+      s.brews.forEach(b=>{b.steps=fixSteps(b.steps);b.plan=fixSteps(b.plan);if(b.doneDate==null)syncDone(b)});
       return s}}catch(e){}
   const r=sample();return {recipes:[r],brews:[sampleBrew(r)]};
 }
@@ -359,7 +383,7 @@ function sample(){
 function startBrew(r){
   const plan=copy(r.steps),steps=copy(r.steps).map(s=>({...s,meas:{vol:'',sg:''},done:false,open:false}));
   const d=new Date(),date=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  return {id:uid(),rid:r.id,name:r.name.replace(/^例：/,'')||'無題の仕込み',style:r.style,date,updated:Date.now(),plan,steps};
+  const b={id:uid(),rid:r.id,name:r.name.replace(/^例：/,'')||'無題の仕込み',style:r.style,date,updated:Date.now(),plan,steps,doneAuto:true,doneDate:'',finDate:''};syncDone(b);return b;
 }
 function sampleBrew(r){
   const b=startBrew(r);b.name='例：ジャーマンピルス 1回目';
@@ -473,9 +497,9 @@ function render(){
   if(view.screen!=='home'&&!cur())view={screen:'home',id:null};
   app.innerHTML=view.screen==='home'?homeHTML():editorHTML();
   let sh=document.getElementById('sheet');
-  if(sheet&&view.screen!=='home'){
+  if(sheet&&(view.screen!=='home'||sheet==='pick')){
     if(!sh){sh=document.createElement('div');sh.id='sheet';document.body.appendChild(sh)}
-    sh.innerHTML=sheetHTML();
+    sh.innerHTML=sheet==='pick'?pickHTML():sheetHTML();
   }else if(sh)sh.remove();
 }
 
@@ -487,20 +511,37 @@ const ICONS={
 const CHEV='<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3l6 5-6 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
 function delBtn(kind,id){const k=kind+id;return `<button class="ghost ${armed===k?'warn':''}" data-act="del" data-kind="${kind}" data-id="${id}">${armed===k?'削除する':'削除'}</button>`}
+let homeTab=(()=>{try{return localStorage.getItem('brew-home-tab')||'plan'}catch(e){return 'plan'}})();
+const fdate=d=>d?d.replace(/-/g,'/'):'—';
 function homeHTML(){
   const rs=[...db.recipes].sort((a,b)=>b.updated-a.updated);
   const bs=[...db.brews].sort((a,b)=>(b.date||'').localeCompare(a.date||'')||b.updated-a.updated);
-  return `<header class="brand"><h1>ビール仕込みノート</h1><p>レシピを計画し、そのレシピで仕込みながら記録します。</p></header>
-  <section class="hsec"><div class="label">新しいレシピ</div>
-  <div class="methods">${Object.entries(STYLES).map(([k,s])=>`<button class="method" data-act="new" data-style="${k}">${ICONS[k]}<div><b>${s.name}</b><span>${s.desc}</span></div><i>›</i></button>`).join('')}</div></section>
-  <section class="hsec"><div class="label">レシピ（計画）</div>
-  ${rs.length?`<div class="saved">${rs.map(r=>{const tr=track(r.steps,false),last=[...tr].reverse().find(x=>x.sg!=null);
-    return `<div class="saved-row"><button class="open" data-act="open" data-kind="r" data-id="${r.id}"><b>${esc(r.name||'無題のレシピ')}</b><span><span class="chip">${STYLES[r.style].name}</span> ${r.steps.length}工程${last?` · <span class="num">予定 SG ${fsg(last.sg)}</span>`:''}</span></button>${delBtn('r',r.id)}</div>`}).join('')}</div>`
-  :'<p class="empty-note">まだありません。上の方式を選ぶと作成されます。</p>'}</section>
-  <section class="hsec"><div class="label">仕込み記録</div>
-  ${bs.length?`<div class="saved">${bs.map(b=>{const tr=track(b.steps,true),last=[...tr].reverse().find(x=>x.sg!=null),dn=b.steps.filter(s=>s.done).length;
-    return `<div class="saved-row"><button class="open" data-act="open" data-kind="b" data-id="${b.id}"><b>${esc(b.name||'無題の仕込み')}</b><span><span class="num">${esc(b.date||'')}</span> · <span class="chip ${dn===b.steps.length&&dn?'hop':'plain'}">${dn===b.steps.length&&dn?'完了':`${dn}/${b.steps.length} 工程`}</span>${last?` · <span class="num">SG ${fsg(last.sg)}</span>`:''}</span></button>${delBtn('b',b.id)}</div>`}).join('')}</div>`
-  :'<p class="empty-note">レシピを開いて「このレシピで仕込みを始める」を押すと、ここに記録ができます。</p>'}</section>`;
+  const tab=(k,l,c)=>`<button role="tab" aria-selected="${homeTab===k}" class="${homeTab===k?'on':''}" data-act="htab" data-v="${k}">${l}<span class="cnt">${c}</span></button>`;
+  let body;
+  if(homeTab==='plan'){
+    body=`<section class="hsec"><div class="label">新しいレシピを作る</div>
+    <div class="methods">${Object.entries(STYLES).map(([k,s])=>`<button class="method" data-act="new" data-style="${k}">${ICONS[k]}<div><b>${s.name}</b><span>${s.desc}</span></div><i>›</i></button>`).join('')}</div></section>
+    <section class="hsec"><div class="label">レシピ</div>
+    ${rs.length?`<div class="saved">${rs.map(r=>{const m=track(r.steps,false).meta,nb=db.brews.filter(b=>b.rid===r.id).length;
+      return `<div class="saved-row"><button class="open" data-act="open" data-kind="r" data-id="${r.id}"><b>${esc(r.name||'無題のレシピ')}</b><span><span class="chip">${STYLES[r.style].name}</span>${m.og!=null?` <span class="num">OG ${fsg(m.og)}</span>`:''}${m.abv!=null?` · <span class="num">${m.abv.toFixed(1)}%</span>`:''}${m.ibu!=null?` · <span class="num">${Math.round(m.ibu)} IBU</span>`:''}${nb?` · 醸造 ${nb} 回`:''}</span></button>${delBtn('r',r.id)}</div>`}).join('')}</div>`
+    :'<p class="empty-note">まだありません。上の方式を選ぶと作成されます。</p>'}</section>`;
+  }else{
+    body=`<button class="primary" data-act="pickRecipe" ${rs.length?'':'disabled'}>＋ レシピを選んで醸造を始める</button>
+    ${rs.length?'':'<p class="hint">先に「計画」でレシピを作ってください。</p>'}
+    <section class="hsec"><div class="label">醸造の記録</div>
+    ${bs.length?`<div class="saved">${bs.map(b=>{const m=track(b.steps,true).meta,dn=b.steps.filter(s=>s.done).length,all=dn===b.steps.length&&dn;
+      const st=b.finDate?'<span class="chip hop">完成</span>':all?'<span class="chip hop">全工程完了</span>':`<span class="chip plain">${dn}/${b.steps.length} 工程</span>`;
+      return `<div class="saved-row"><button class="open" data-act="open" data-kind="b" data-id="${b.id}"><b>${esc(b.name||'無題の醸造')}</b><span>${st} 醸造 <span class="num">${fdate(b.date)}</span> → ${b.finDate?'完成':'完成予定'} <span class="num">${fdate(b.finDate||b.doneDate)}</span>${m.abv!=null?` · <span class="num">${m.abv.toFixed(1)}%</span>`:''}</span></button>${delBtn('b',b.id)}</div>`}).join('')}</div>`
+    :'<p class="empty-note">まだありません。上のボタンからレシピを選ぶと、醸造の記録が始まります。</p>'}</section>`;
+  }
+  return `<header class="brand"><h1>ビール仕込みノート</h1><p>計画でレシピを作り、醸造でそのレシピを使って記録します。</p></header>
+  <div class="htabs" role="tablist">${tab('plan','計画',rs.length)}${tab('brew','醸造',bs.length)}</div>${body}`;
+}
+function pickHTML(){
+  const rs=[...db.recipes].sort((a,b)=>b.updated-a.updated);
+  return `<div class="scrim" data-act="close"><div class="sheet" role="dialog" aria-label="レシピを選ぶ">
+    <div class="sheet-head"><h2>どのレシピで醸造しますか？</h2><button class="ghost" data-act="close">閉じる</button></div>
+    <div class="picks one">${rs.map(r=>{const m=track(r.steps,false).meta;return `<button class="pick" data-act="brewFrom" data-id="${r.id}"><b>${esc(r.name||'無題のレシピ')}</b><span>${STYLES[r.style].name}${m.og!=null?` · OG ${fsg(m.og)}`:''}${m.abv!=null?` · ${m.abv.toFixed(1)}%`:''}${m.ibu!=null?` · ${Math.round(m.ibu)} IBU`:''}</span></button>`}).join('')}</div></div></div>`;
 }
 
 function stepSummary(s){
@@ -524,11 +565,15 @@ function editorHTML(){
   const onlyDefaults=r.steps.every(x=>['water','malt','dissolve','heat'].includes(x.type));
   return `<div class="topbar"><button class="back" data-act="back" aria-label="戻る">‹</button>
     <div class="namebox"><input id="rname" type="text" data-f="doc|name" value="${esc(r.name)}" placeholder="${brew?'仕込みの名前':'レシピの名前'}"></div>
-    <span class="chip ${brew?'hop':''}">${brew?'仕込み記録':'レシピ'}</span></div>
-  ${brew?`<div class="meta"><div class="field"><label for="bdate">仕込み日</label><div class="inp"><input id="bdate" type="date" data-f="doc|date" value="${esc(r.date)}"></div></div><p class="hint">${STYLES[r.style].name}${(()=>{const src=db.recipes.find(x=>x.id===r.rid);return src?` · 元のレシピ「${esc(src.name)}」`:''})()}<br>工程の数値は実際の値に書き換えられます。予定はレシピを始めた時点のものです。</p></div>`
-    :`<p class="hint mode-note">${STYLES[r.style].name}のレシピを計画します。仕込む日は下の「このレシピで仕込みを始める」から記録モードに入ります。</p>`}
+    <span class="chip ${brew?'hop':''}">${brew?'醸造':'計画'}</span></div>
+  ${brew?`<div class="meta"><div class="field"><label for="bdate">醸造日</label><div class="inp"><input id="bdate" type="date" data-f="doc|date" value="${esc(r.date)}"></div></div>
+    <div class="field"><label for="bdone">完成予定日</label><div class="inp"><input id="bdone" type="date" data-f="doc|doneDate" value="${esc(r.doneDate||'')}"></div></div>
+    <div class="field"><label for="bfin">完成した日</label><div class="inp"><input id="bfin" type="date" data-f="doc|finDate" value="${esc(r.finDate||'')}"></div></div>
+    <p class="hint meta-note" id="done-hint">${doneHint(r)}</p>
+    <p class="hint meta-note">${STYLES[r.style].name}${(()=>{const src=db.recipes.find(x=>x.id===r.rid);return src?` · 元のレシピ「${esc(src.name)}」`:''})()}<br>工程の数値は実際の値に書き換えられます。予定はレシピを始めた時点のものです。</p></div>`
+    :`<p class="hint mode-note">${STYLES[r.style].name}のレシピを計画します。醸造する日は「このレシピで醸造を始める」を押すと、醸造の記録が作られます。</p>`}
   <section class="summary" id="summary">${summaryInner(r,tr,pt,pm)}</section>
-  ${brew?'':`<button class="secondary" data-act="startBrew">このレシピで仕込みを始める</button>`}
+  ${brew?'':`<button class="secondary" data-act="startBrew">このレシピで醸造を始める</button>`}
   ${onlyDefaults?`<div class="empty-steps"><p>${STYLES[r.style].name}の標準的な工程をまとめて入れるか、下の各項目から1つずつ追加できます。</p><button class="secondary" data-act="tpl">標準の工程をまとめて追加</button></div>`:''}
   <div class="groups">${GROUPS.map(g=>groupHTML(r,g,tr,pt)).join('')}</div>`;
 }
@@ -546,12 +591,16 @@ function groupHTML(r,g,tr,pt){
   r.collapsed=r.collapsed||{};const closed=!!r.collapsed[g];
   const items=r.steps.map((s,i)=>[s,i]).filter(([s])=>gOf(s)===g);
   const no={mash:'1',brew:'2',ferm:'3'}[g];
-  return `<section class="group ${closed?'':'is-open'}" id="grp-${g}">
+  return `<section class="group g-${g} ${closed?'':'is-open'}" id="grp-${g}">
     <button class="group-head" data-act="gtoggle" data-g="${g}" aria-expanded="${!closed}">${CHEV}<span class="gno">${no}</span><span class="gt"><b>${gName(g,r.style)}</b><span id="gsum-${g}">${esc(groupSummary(g,r,tr))}</span></span></button>
     ${closed?'':`<div class="group-body">${items.length?`<div class="steps">${items.map(([s,i],k)=>stepHTML(r,s,i,tr[i],pt&&pt[s.id],k===0,k===items.length-1)).join('')}</div>`:'<p class="hint">この項目の工程はまだありません。</p>'}
       <button class="addstep" data-act="sheet" data-g="${g}">＋ ${g==='mash'?(r.style==='extract'?'準備':'マッシング'):g==='brew'?'仕込み':'発酵・熟成'}の工程を追加</button></div>`}
   </section>`;
 }
+function addDays(d,k){const t=new Date(d+'T00:00:00');if(isNaN(t))return '';t.setDate(t.getDate()+k);return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`}
+function autoDone(b){const d=totalDays(b.steps);return b.date&&d?addDays(b.date,d):''}
+function doneHint(b){const a=autoDone(b);return a?`醸造日に発酵・熟成の日数（${totalDays(b.steps)} 日）を足すと ${a.replace(/-/g,'/')}。${b.doneAuto===false?'完成予定日は手で変更しています。':'日数を変えると完成予定日も自動で変わります。'}`:'発酵・熟成の工程に日数を入れると、完成予定日を自動で計算します。'}
+function syncDone(b){if(b.doneAuto!==false)b.doneDate=autoDone(b)}
 function planRows(b){const t=track(b.plan||[],false),m={};(b.plan||[]).forEach((s,i)=>m[s.id]=t[i]);return m}
 
 function summaryInner(r,tr,pt,pm){
@@ -571,7 +620,8 @@ function summaryInner(r,tr,pt,pm){
     ${brew?tile('進み具合',`${dn}<span class="sub">/${r.steps.length}</span>`,'工程が完了')
       :tile('仕込み日の作業',tt?Math.floor(tt/60)+':'+String(tt%60).padStart(2,'0'):'—',td?`発酵・熟成 ${td} 日`:`${r.steps.length} 工程`)}
   </div>
-  ${chartSVG(r.steps.length,series,brew)}${gravTable(r,tr,pt)}`;
+  <button class="grav-toggle ${r.showGrav?'is-open':''}" data-act="gravToggle" aria-expanded="${!!r.showGrav}">${CHEV}<span>比重の推移と工程ごとの比重</span></button>
+  ${r.showGrav?`<div class="grav-body">${chartSVG(r.steps.length,series,brew)}${gravTable(r,tr,pt)}</div>`:''}`;
 }
 
 function chartSVG(N,series,brew){
@@ -766,7 +816,7 @@ function touch(){const r=cur();if(r)r.updated=Date.now();save()}
 function onInput(e){
   const el=e.target.closest('[data-f]');if(!el)return;
   const parts=el.dataset.f.split('|'),r=cur();if(!r)return;
-  if(parts[0]==='doc'){r[parts[1]]=el.value;touch();return}
+  if(parts[0]==='doc'){r[parts[1]]=el.value;if(parts[1]==='doneDate')r.doneAuto=!el.value;if(parts[1]==='date'||parts[1]==='doneDate'){syncDone(r);const dd=document.getElementById('bdone');if(dd&&parts[1]==='date')dd.value=r.doneDate||'';const h=document.getElementById('done-hint');if(h)h.textContent=doneHint(r)}touch();return}
   const s=r.steps.find(x=>x.id===parts[0]);if(!s)return;
   if(parts[1]==='p')s.p[parts[2]]=el.value;
   else if(parts[1]==='meas')s.meas[parts[2]]=el.value;
@@ -783,6 +833,7 @@ function onInput(e){
   else if(parts[1]==='decN'){const k=+el.value;while(s.decs.length<k)s.decs.push({...DEC_DEF[s.decs.length]});s.decs.length=k;s.p.decN=String(k);touch();render();return}
   else if(parts[1]==='memo')s.memo=el.value;
   else if(parts[1]==='title')s.title=el.value;
+  if(isBrew()&&parts[2]==='days'){syncDone(r);const dd=document.getElementById('bdone');if(dd)dd.value=r.doneDate||'';const h=document.getElementById('done-hint');if(h)h.textContent=doneHint(r)}
   touch();refreshComputed();
   if(s.type==='mash'){const d=document.getElementById('deco-'+s.id);if(d){const i=r.steps.indexOf(s);d.innerHTML=decoHTML(s,kgBefore(r.steps,i))}}
 }
@@ -797,13 +848,17 @@ document.addEventListener('click',e=>{
   const idx=r?r.steps.findIndex(s=>s.id===id):-1;
   switch(a){
     case 'back':if(sheet||stack.length)history.back();return;
+    case 'htab':homeTab=b.dataset.v;try{localStorage.setItem('brew-home-tab',homeTab)}catch(e){}break;
+    case 'pickRecipe':sheet='pick';history.pushState({app:1},'');break;
+    case 'brewFrom':{const rr=db.recipes.find(x=>x.id===id);if(!rr)break;sheet=false;history.replaceState({app:1},'');const nb=startBrew(rr);db.brews.push(nb);homeTab='brew';try{localStorage.setItem('brew-home-tab','brew')}catch(e){}stack.push(view);view={screen:'brew',id:nb.id};window.scrollTo(0,0);save();break}
+    case 'gravToggle':r.showGrav=!r.showGrav;save();break;
     case 'gtoggle':{const g=b.dataset.g;r.collapsed=r.collapsed||{};r.collapsed[g]=!r.collapsed[g];save();break}
     case 'exitNo':closeExit(true);return;
     case 'exitYes':doExit();return;
     case 'new':{const st=b.dataset.style,nr={id:uid(),name:'',style:st,updated:Date.now(),steps:['water',st==='extract'?'dissolve':'malt'].map(k=>mkStep(k,st))};db.recipes.push(nr);go({screen:'recipe',id:nr.id});save();break}
     case 'open':go({screen:b.dataset.kind==='b'?'brew':'recipe',id});break;
     case 'del':{const k=b.dataset.kind;if(prevArmed===k+id){if(k==='r')db.recipes=db.recipes.filter(x=>x.id!==id);else db.brews=db.brews.filter(x=>x.id!==id);save()}else armed=k+id;break}
-    case 'startBrew':{const nb=startBrew(r);db.brews.push(nb);go({screen:'brew',id:nb.id});save();break}
+    case 'startBrew':{const nb=startBrew(r);db.brews.push(nb);homeTab='brew';try{localStorage.setItem('brew-home-tab','brew')}catch(e){}go({screen:'brew',id:nb.id});save();break}
     case 'tpl':{const have=new Set(r.steps.map(x=>x.type));STYLES[r.style].tpl.filter(k=>!have.has(k)).forEach(k=>{const s=mkStep(k,r.style);s.open=false;r.steps.push(s)});sortSteps(r.steps);r.collapsed={};touch();break}
     case 'sheet':sheet=b.dataset.g||'brew';history.pushState({app:1},'');break;
     case 'close':if(sheet)history.back();return;
