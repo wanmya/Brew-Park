@@ -781,7 +781,7 @@ function waterAddHTML(s){
     const over=r.over?`<span class="need warn">150ppm（${(CACL2_MAX*w.V/1000).toFixed(1)} g）を超えています</span>`:'';
     return `<div class="irow"><div class="irow-top"><div class="inp sel">${catSelect('add',base,it.cat)}</div><button class="icon" data-act="delItem" data-g="list" data-id="${s.id}" data-j="${r.j}" aria-label="行を削除">✕</button></div>
       ${custom?`<div class="inp"><input type="text" id="${base.replace(/\|/g,'-')}-name" aria-label="名前" data-f="${base}|name" value="${esc(it.name)}" placeholder="名前を入力"></div>`:''}
-      <div class="irow-nums two"><div class="inp">${numIn(base,'amt',it.amt,r.need!=null&&r.need>0.005?r.need.toFixed(unit==='ml'?2:1):'','量')}<u>${unit}</u></div><div class="needbox">${need}${over}</div></div></div>`;
+      <div class="irow-nums two"><div class="inp">${numIn(base,'amt',it.amt,r.need!=null&&r.need>0.005?r.need.toFixed(unit==='ml'?2:1):'','量')}<u>${unit}</u></div><div class="needbox" id="need-${s.id}-${r.j}">${need}${over}</div></div></div>`;
   }).join('');
   let sum='';
   if(!w.V)sum=`<p class="hint">水量を入れると、目標pHに必要な添加量を計算します。</p>`;
@@ -792,7 +792,12 @@ function waterAddHTML(s){
       <div class="calc-res">入力した量での推定 pH <b class="num">${ach.toFixed(2)}</b>${w.over?' <span class="need warn">目標より下がりすぎます</span>':''}</div>
       <div class="muted">どれか1つに量を入れると、残りの添加剤の「目標pHに必要」な量が、その分を引いた量に変わります。カルシウムの効果はマッシュ中で効く分を酸に換算しています。</div></div>`;
   }
-  return rows+sum;
+  return rows+`<div id="wsum-${s.id}">${sum}</div>`;
+}
+/* 入力中の欄は描き直さず、計算結果の部分だけ更新する */
+function waterRefresh(s){
+  const tmp=document.createElement('div');tmp.innerHTML=waterAddHTML(s);
+  tmp.querySelectorAll('[id^="need-"],[id^="wsum-"]').forEach(el=>{const cur=document.getElementById(el.id);if(cur)cur.innerHTML=el.innerHTML});
 }
 function phHTML(s,brew,pp){
   const w=waterPH(s,brew),mp=mashPH(w.ph),f=phFactor(mp);
@@ -922,7 +927,7 @@ function refreshComputed(){
   document.getElementById('summary').innerHTML=summaryInner(r,tr,pt,pm);
   GROUPS.forEach(g=>{const e=document.getElementById('gsum-'+g);if(e)e.textContent=groupSummary(g,r,tr)});
   r.steps.forEach((s,i)=>{const a=document.getElementById('after-'+s.id);if(a)a.innerHTML=s.type==='water'?phHTML(s,brew):afterHTML(tr[i],pt&&pt[s.id],brew);
-    if(s.type==='water'){const wa=document.getElementById('wadd-'+s.id);if(wa){const fe=document.activeElement,fid=fe&&fe.id,pos=fe&&fe.selectionStart;wa.innerHTML=waterAddHTML(s);if(fid){const ne=document.getElementById(fid);if(ne&&ne!==fe){ne.focus();try{ne.setSelectionRange(pos,pos)}catch(e){}}}}}
+    if(s.type==='water'&&document.getElementById('wadd-'+s.id))waterRefresh(s);
     const h=document.getElementById('help-'+s.id);if(h)h.innerHTML=diluteHelp(s,tr[i]);
     const c=document.getElementById('info-'+s.id);if(c)c.innerHTML=calcInfo(tr[i])});
 }
