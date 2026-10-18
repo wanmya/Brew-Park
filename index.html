@@ -235,6 +235,11 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .fbar{height:6px;border-radius:99px;background:var(--line);overflow:hidden}
 .fbar i{display:block;height:100%;background:var(--g3)}
 .today{border:1px solid var(--g3);background:var(--surface);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;font-size:.9rem}
+.conv .crow{display:grid;grid-template-columns:92px 1fr 40px;gap:8px;align-items:center;font-size:.82rem}
+.cbar{height:6px;border-radius:99px;background:var(--line);overflow:hidden}
+.cbar i{display:block;height:100%;background:var(--g1)}
+.crow .num:last-child{text-align:right}
+.warnbox{background:var(--g3-soft)}
 .addrow{align-self:flex-start;background:none;border:1px dashed var(--line);border-radius:8px;padding:5px 12px;font-size:.85rem;color:var(--accent)}
 .meas{border-top:1px dashed var(--line);padding-top:10px;display:flex;flex-direction:column;gap:6px}
 .meas-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
@@ -526,6 +531,33 @@ function yeastProfile(cat,name){
 function fermRate(T,pr){let k=Math.pow(2,(T-pr.opt)/10);if(T<pr.lo)k*=Math.pow(0.5,(pr.lo-T)/3);return k}
 const fermP=(tau,half)=>tau<=0?0:1/(1+Math.pow(half/tau,3));
 const fermTau=(p,half)=>p<=0?0:p>=0.999?half*10:half/Math.pow(1/p-1,1/3);
+/* 糖化の進み具合
+   でんぷんが糖に変わる速さを温度ごとに決め（1分あたりの速さ k）、休止ごとに「k × 分」を足し合わせる。
+   進み具合 = 1 − e^(−Σ k×分)。
+   k：55℃未満は0（アシッド・プロテインレストではほぼ進まない）、55〜62℃で上がり、62〜72℃で最大 0.06、
+      72〜78℃で下がって0（酵素が壊れる）。
+   目安：65℃なら 30分で約83%、45分で約93%、60分で約97%。
+   入力した糖化効率は、糖化が100%終わったときの値とみなし、進み具合をかけて比重を出す */
+function convK(T){if(T==null||T<55)return 0;if(T<62)return 0.06*(T-55)/7;if(T<=72)return 0.06;if(T<78)return 0.06*(78-T)/6;return 0}
+function mashConv(s){
+  const rests=s.p.method==='decoction'?[{temp:s.p.startTemp,time:s.p.startTime},...(s.decs||[]).map(d=>({temp:d.target,time:d.time}))]:(s.rests||[]);
+  let S=0,main=null;const rows=[];
+  rests.forEach(r=>{const T=n(r.temp),t=n(r.time)||0,k=convK(T);S+=k*t;rows.push({T,t,k,c:1-Math.exp(-S)});if(k>0&&(!main||k*t>=main.k*main.t))main={T,t,k}});
+  const c=rows.length?1-Math.exp(-S):1;
+  const need=tg=>{if(!main)return null;const x=(-Math.log(1-tg)-S)/main.k;return x>0?Math.ceil(x):0};
+  return {rows,c,main,S,need95:need(0.95),need99:need(0.99),none:!rows.some(r=>r.k>0)};
+}
+function convHTML(s){
+  const m=mashConv(s);
+  if(!m.rows.length)return '';
+  if(m.none)return `<div class="calc conv warnbox"><div>糖化の進み具合 <b class="num">0%</b></div><div class="muted">どの休止も55℃未満なので、でんぷんがほとんど糖に変わりません。62〜70℃の休止を入れてください。</div></div>`;
+  const pc=Math.round(m.c*100);
+  const tip=m.c>=0.99?'ほぼ完全に糖化します。':m.c>=0.95?`十分です。完全に近づけるなら、${m.main.T}℃をあと ${m.need99} 分延ばすと99%。`:`まだ途中です。${m.main.T}℃をあと ${m.need95} 分延ばすと95%、${m.need99} 分で99%。`;
+  return `<div class="calc conv"><div class="label">糖化の進み具合</div>
+    ${m.rows.map(r=>`<div class="crow"><span class="num">${r.T??'—'}℃ ${r.t}分</span><span class="cbar"><i style="width:${Math.round(r.c*100)}%"></i></span><span class="num">${Math.round(r.c*100)}%</span></div>`).join('')}
+    <div class="calc-res">→ 糖化 <b class="num">${pc}%</b>：比重の計算に反映しています</div>
+    <div class="muted">${tip}ヨウ素反応（ヨウ素液が青紫にならない）で終わりを確かめるのが確実です。</div></div>`;
+}
 function solveSG(E,V){let lo=1,hi=1.2;for(let k=0;k<60;k++){const m=(lo+hi)/2;if(V*m*plato(m)/100<E)lo=m;else hi=m}return (lo+hi)/2}
 /* IBU（Tinseth式）：利用率 = 1.65×0.000125^(平均比重−1) × (1−e^(−0.04×煮沸分))/4.15。
    IBU = 利用率 × α酸(%)/100 × ホップ(g) × 1000 ÷ ボイル後の液量(L)。平均比重はボイル前後の平均。
@@ -540,8 +572,8 @@ function track(steps,useMeas){
     if(s.type==='water'){const w=waterPH(s,useMeas);wph=w;const mp=mashPH(w.ph);info={kind:'water',wph:w.ph,how:w.how,mph:mp,fac:phFactor(mp)}}
     if((s.type==='malt'||s.type==='dissolve')&&s.list)s.list.forEach(it=>{const k=n(it.amt);if(k){kg+=k;pot+=k*(n(it.yld)??DEF.yld)/100}});
     if(s.type==='mash'){
-      const eff0=n(s.p.eff)??DEF.eff,V=n(s.p.wort),wp=wph?wph.ph:7,mp=mashPH(wp),fac=phFactor(mp),eff=eff0*fac;
-      info={kind:'mash',kg,pot,eff,eff0,fac,mp,wp,noWater:!wph,V};
+      const eff0=n(s.p.eff)??DEF.eff,V=n(s.p.wort),wp=wph?wph.ph:7,mp=mashPH(wp),fac=phFactor(mp),conv=mashConv(s).c,eff=eff0*fac*conv;
+      info={kind:'mash',kg,pot,eff,eff0,fac,conv,mp,wp,noWater:!wph,V};
       if(pot>0&&V>0){const E=pot*eff/100;sg=solveSG(E,V);vol=V;changed=true;Object.assign(info,{E,sg})}
     }
     if(s.type==='dissolve'){
@@ -902,7 +934,8 @@ function mashBody(s,t){
       <div class="inp"><input type="number" inputmode="decimal" step="any" id="${s.id}-r${j}-t" aria-label="温度" data-f="${s.id}|rest|${j}|temp" value="${esc(r.temp)}"><u>℃</u></div>
       <div class="inp"><input type="number" inputmode="decimal" step="any" id="${s.id}-r${j}-m" aria-label="時間" data-f="${s.id}|rest|${j}|time" value="${esc(r.time)}"><u>分</u></div>
       <button class="icon" data-act="delRest" data-id="${s.id}" data-j="${j}" aria-label="段を削除" ${s.rests.length<2?'disabled':''}>✕</button></div>`).join('')}
-      <button class="addrow" data-act="addRest" data-id="${s.id}">＋ 段を追加</button></div>`;
+      <button class="addrow" data-act="addRest" data-id="${s.id}">＋ 段を追加</button></div>
+    <div id="conv-${s.id}">${convHTML(s)}</div>`;
     return h;
   }
   h+=`<div class="fields">${inputHTML(s.id,'p',{k:'mashWater',l:'マッシュ水量',u:'L'},s.p.mashWater)}${inputHTML(s.id,'p',{k:'startTemp',l:'最初の休止温度',u:'℃'},s.p.startTemp)}${inputHTML(s.id,'p',{k:'startTime',l:'最初の休止時間',u:'分'},s.p.startTime)}
@@ -911,7 +944,8 @@ function mashBody(s,t){
       <div class="inp"><input type="number" inputmode="decimal" step="any" id="${s.id}-d${j}-t" aria-label="目標温度" data-f="${s.id}|dec|${j}|target" value="${esc(d.target)}"><u>℃</u></div>
       <div class="inp"><input type="number" inputmode="decimal" step="any" id="${s.id}-d${j}-m" aria-label="休止時間" data-f="${s.id}|dec|${j}|time" value="${esc(d.time)}"><u>分</u></div><span></span></div>`).join('')}</div>
     <div class="fields">${inputHTML(s.id,'p',{k:'fire',l:'火力（1.5 L を 50→100℃ にかかる時間）',u:'分'},s.p.fire)}</div>
-    <div id="deco-${s.id}">${decoHTML(s,kg)}</div>`;
+    <div id="deco-${s.id}">${decoHTML(s,kg)}</div>
+    <div id="conv-${s.id}">${convHTML(s)}</div>`;
   return h;
 }
 function decoHTML(s,kg){
@@ -960,7 +994,7 @@ function calcInfo(t){
   }
   if(!i.kg)return `<p class="hint">この工程より前の「モルト投入」にモルトの量を入れると、麦汁の比重を計算します。</p>`;
   if(!i.V)return `<p class="hint">「得る麦汁量」を入れると、その量の麦汁の比重を計算します。</p>`;
-  let h=`<div class="calc"><div>モルト <span class="num">${i.kg.toFixed(2)} kg</span> × 収率 → エキス最大 <span class="num">${i.pot.toFixed(2)} kg</span><br>× 糖化効率 <span class="num">${i.eff0}%</span>${i.fac<1?` × pH補正 <span class="num">${i.fac.toFixed(2)}</span>`:''} = <b class="num">${i.E.toFixed(2)} kg</b> を <span class="num">${fv(i.V)} L</span> の麦汁に</div><div class="calc-res">→ <b class="num">SG ${fsg(i.sg)}</b> <span class="num muted">${plato(i.sg).toFixed(1)}°P</span></div><div class="muted">推定マッシュpH <span class="num">${i.mp.toFixed(2)}</span>（水のpH ${i.wp.toFixed(2)}${i.noWater?'、水質調整の工程がないため7とみなす':''}）。${i.fac<1?`最適範囲 5.2〜5.5 から外れるため、効率を ${Math.round((1-i.fac)*100)}% 下げています。`:'最適範囲 5.2〜5.5 なので補正なし。'}</div>`;
+  let h=`<div class="calc"><div>モルト <span class="num">${i.kg.toFixed(2)} kg</span> × 収率 → エキス最大 <span class="num">${i.pot.toFixed(2)} kg</span><br>× 糖化効率 <span class="num">${i.eff0}%</span>${i.fac<1?` × pH補正 <span class="num">${i.fac.toFixed(2)}</span>`:''}${i.conv<0.995?` × 糖化 <span class="num">${Math.round(i.conv*100)}%</span>`:''} = <b class="num">${i.E.toFixed(2)} kg</b> を <span class="num">${fv(i.V)} L</span> の麦汁に</div><div class="calc-res">→ <b class="num">SG ${fsg(i.sg)}</b> <span class="num muted">${plato(i.sg).toFixed(1)}°P</span></div><div class="muted">推定マッシュpH <span class="num">${i.mp.toFixed(2)}</span>（水のpH ${i.wp.toFixed(2)}${i.noWater?'、水質調整の工程がないため7とみなす':''}）。${i.fac<1?`最適範囲 5.2〜5.5 から外れるため、効率を ${Math.round((1-i.fac)*100)}% 下げています。`:'最適範囲 5.2〜5.5 なので補正なし。'}</div>`;
   if(i.actEff!=null)h+=`<div class="act">実測（<span class="num">${fv(i.actVol)} L / ${fsg(i.actSg)}</span>${i.volGuessed?'、液量は予定値':''}）から求めた糖化効率 <b class="num">${i.actEff.toFixed(1)}%</b></div>`;
   return h+`</div>`;
 }
@@ -1051,7 +1085,7 @@ function onInput(e){
   else if(parts[1]==='title')s.title=el.value;
   if(isBrew()&&parts[2]==='days'){syncDone(r);const dd=document.getElementById('bdone');if(dd)dd.value=r.doneDate||'';const h=document.getElementById('done-hint');if(h)h.textContent=doneHint(r)}
   touch();refreshComputed();
-  if(s.type==='mash'){const d=document.getElementById('deco-'+s.id);if(d){const i=r.steps.indexOf(s);d.innerHTML=decoHTML(s,kgBefore(r.steps,i))}}
+  if(s.type==='mash'){const cv=document.getElementById('conv-'+s.id);if(cv)cv.innerHTML=convHTML(s);const d=document.getElementById('deco-'+s.id);if(d){const i=r.steps.indexOf(s);d.innerHTML=decoHTML(s,kgBefore(r.steps,i))}}
 }
 document.addEventListener('input',onInput);
 document.addEventListener('change',onInput);
