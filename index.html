@@ -258,6 +258,16 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .tbar{height:8px;border-radius:99px;background:var(--line);overflow:hidden}
 .tbar i{display:block;height:100%}
 .small{font-size:.72rem}
+.radar-wrap{display:flex;justify-content:center}
+.radar{width:100%;max-width:340px;height:auto;display:block}
+.savebtn{margin-top:4px}
+.hint.center{text-align:center;margin-top:-8px}
+.saved-note{text-align:center;color:var(--hop);font-size:.88rem;font-weight:700;padding:6px}
+.dlg-btns.col{flex-direction:column;align-items:stretch}
+.dlg-btns.col button{width:100%}
+.ghost.warn{color:var(--danger);border-color:var(--danger)}
+#toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:99px;font-size:.9rem;font-weight:700;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:40}
+#toast.show{opacity:1;transform:translate(-50%,0)}
 .addrow{align-self:flex-start;background:none;border:1px dashed var(--line);border-radius:8px;padding:5px 12px;font-size:.85rem;color:var(--accent)}
 .meas{border-top:1px dashed var(--line);padding-top:10px;display:flex;flex-direction:column;gap:6px}
 .meas-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
@@ -372,7 +382,7 @@ function uid(){return Math.random().toString(36).slice(2,9)}
 function load(){
   try{const s=JSON.parse(localStorage.getItem(KEY));
     if(s&&Array.isArray(s.recipes)){s.brews=Array.isArray(s.brews)?s.brews:[];
-      s.recipes.forEach(r=>{r.steps=fixSteps(r.steps)});
+      s.recipes=s.recipes.filter(r=>!r.draft);s.recipes.forEach(r=>{r.steps=fixSteps(r.steps)});
       s.brews.forEach(b=>{b.steps=fixSteps(b.steps);b.plan=fixSteps(b.plan);if(b.doneDate==null)syncDone(b)});
       return s}}catch(e){}
   const r=sample();return {recipes:[r],brews:[sampleBrew(r)]};
@@ -716,7 +726,7 @@ const isList=()=>view.screen==='home'||view.screen==='plans'||view.screen==='bre
 function homeHTML(){
   if(view.screen==='plans')return plansHTML();
   if(view.screen==='brews')return brewsHTML();
-  const nr=db.recipes.length,nb=db.brews.length,act=db.brews.filter(b=>!b.finDate).length;
+  const nr=db.recipes.filter(r=>!r.draft).length,nb=db.brews.length,act=db.brews.filter(b=>!b.finDate).length;
   return `<header class="brand"><h1>ビール仕込みノート</h1><p>計画でレシピを作り、醸造でそのレシピを使って記録します。</p></header>
   <section class="hsec"><div class="label">新しいレシピを作る</div>
   <div class="methods">${Object.entries(STYLES).map(([k,s])=>`<button class="method" data-act="new" data-style="${k}">${ICONS[k]}<div><b>${s.name}</b><span>${s.desc}</span></div><i>›</i></button>`).join('')}</div></section>
@@ -727,14 +737,14 @@ function homeHTML(){
 }
 function listTop(t){return `<div class="topbar"><button class="back" data-act="back" aria-label="戻る">‹</button><div class="namebox"><b class="ltitle">${t}</b></div></div>`}
 function plansHTML(){
-  const rs=[...db.recipes].sort((a,b)=>b.updated-a.updated);
+  const rs=db.recipes.filter(r=>!r.draft).sort((a,b)=>b.updated-a.updated);
   return `${listTop('計画')}<p class="hint">レシピを押すと、確認・編集できます。新しいレシピはホームの「新しいレシピを作る」から作ります。</p>
   ${rs.length?`<div class="saved">${rs.map(r=>{const m=track(r.steps,false).meta,nb=db.brews.filter(b=>b.rid===r.id).length;
     return `<div class="saved-row"><button class="open" data-act="open" data-kind="r" data-id="${r.id}"><b>${esc(r.name||'無題のレシピ')}</b><span><span class="chip">${STYLES[r.style].name}</span>${m.og!=null?` <span class="num">OG ${fsg(m.og)}</span>`:''}${m.abv!=null?` · <span class="num">${m.abv.toFixed(1)}%</span>`:''}${m.ibu!=null?` · <span class="num">${Math.round(m.ibu)} IBU</span>`:''}${nb?` · 醸造 ${nb} 回`:''}</span></button>${delBtn('r',r.id)}</div>`}).join('')}</div>`
   :'<p class="empty-note">まだレシピがありません。ホームの「新しいレシピを作る」から作れます。</p>'}`;
 }
 function brewsHTML(){
-  const rs=db.recipes,bs=[...db.brews].sort((a,b)=>(b.date||'').localeCompare(a.date||'')||b.updated-a.updated);
+  const rs=db.recipes.filter(r=>!r.draft),bs=[...db.brews].sort((a,b)=>(b.date||'').localeCompare(a.date||'')||b.updated-a.updated);
   return `${listTop('醸造')}<button class="primary" data-act="pickRecipe" ${rs.length?'':'disabled'}>＋ レシピを選んで醸造を始める</button>
   ${rs.length?'':'<p class="hint">先に「計画」でレシピを作ってください。</p>'}
   <section class="hsec"><div class="label">醸造の記録</div>
@@ -744,7 +754,7 @@ function brewsHTML(){
   :'<p class="empty-note">まだありません。上のボタンからレシピを選ぶと、醸造の記録が始まります。</p>'}</section>`;
 }
 function pickHTML(){
-  const rs=[...db.recipes].sort((a,b)=>b.updated-a.updated);
+  const rs=db.recipes.filter(r=>!r.draft).sort((a,b)=>b.updated-a.updated);
   return `<div class="scrim" data-act="close"><div class="sheet" role="dialog" aria-label="レシピを選ぶ">
     <div class="sheet-head"><h2>どのレシピで醸造しますか？</h2><button class="ghost" data-act="close">閉じる</button></div>
     <div class="picks one">${rs.map(r=>{const m=track(r.steps,false).meta;return `<button class="pick" data-act="brewFrom" data-id="${r.id}"><b>${esc(r.name||'無題のレシピ')}</b><span>${STYLES[r.style].name}${m.og!=null?` · OG ${fsg(m.og)}`:''}${m.abv!=null?` · ${m.abv.toFixed(1)}%`:''}${m.ibu!=null?` · ${Math.round(m.ibu)} IBU`:''}</span></button>`}).join('')}</div></div></div>`;
@@ -783,7 +793,9 @@ function editorHTML(){
   <section class="summary" id="summary">${summaryInner(r,tr,pt,pm)}</section>
   ${brew?'':`<button class="secondary" data-act="startBrew">このレシピで醸造を始める</button>`}
   ${onlyDefaults?`<div class="empty-steps"><p>${STYLES[r.style].name}の標準的な工程をまとめて入れるか、下の各項目から1つずつ追加できます。</p><button class="secondary" data-act="tpl">標準の工程をまとめて追加</button></div>`:''}
-  <div class="groups">${GROUPS.map(g=>groupHTML(r,g,tr,pt)).join('')}</div>`;
+  <div class="groups">${GROUPS.map(g=>groupHTML(r,g,tr,pt)).join('')}</div>
+  ${brew?'':r.draft?`<button class="primary savebtn" data-act="saveRecipe">レシピを保存する</button><p class="hint center">まだ保存していません。保存すると「計画」の一覧に入ります。</p>`
+    :`<div class="saved-note">✓ 保存済みのレシピです。変更は自動で保存されます。</div>`}`;
 }
 function todayHTML(r,tr){
   const e=todayEst(r,tr);if(!e)return '';
@@ -837,11 +849,24 @@ function planRows(b){const t=track(b.plan||[],false),m={};(b.plan||[]).forEach((
    苦味：IBU（70 IBU で最大）。甘み：FG の残糖（°P）から。苦味が強いと甘みは感じにくくなるので BU:GU で割り引く。
    ボディ：残糖と度数から。アルコール感：度数（9%で最大）。キレ：見かけの発酵度（60%→0、90%→最大）。
    バランス：BU:GU（IBU ÷ OGの比重ポイント）。0.3未満は甘い・モルティ、0.5前後で釣り合い、0.7超は苦い */
+function radarSVG(sc){
+  const W=340,H=270,cx=W/2,cy=142,R=90,N=sc.length;
+  const pt=(i,r)=>{const a=-Math.PI/2+i*2*Math.PI/N;return [cx+Math.cos(a)*r,cy+Math.sin(a)*r]};
+  let g='';
+  for(let k=1;k<=5;k++)g+=`<polygon points="${sc.map((_,i)=>pt(i,R*k/5).join(',')).join(' ')}" fill="none" stroke="var(--line)" stroke-width="${k===5?1.5:1}"/>`;
+  sc.forEach((_,i)=>{const [x,y]=pt(i,R);g+=`<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="var(--line)" stroke-width="1"/>`});
+  const poly=sc.map(([,v],i)=>pt(i,R*Math.max(0.15,v)/5).join(',')).join(' ');
+  g+=`<polygon points="${poly}" fill="var(--accent)" fill-opacity=".28" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round"/>`;
+  sc.forEach(([,v,c],i)=>{const [x,y]=pt(i,R*Math.max(0.15,v)/5);g+=`<circle cx="${x}" cy="${y}" r="4.5" fill="var(${c})" stroke="var(--surface)" stroke-width="1.5"/>`});
+  sc.forEach(([l,v],i)=>{const [x,y]=pt(i,R+22),anc=Math.abs(x-cx)<8?'middle':x>cx?'start':'end',dy=y<cy-R?-2:y>cy+R/2?10:4;
+    g+=`<text x="${x}" y="${y+dy-6}" text-anchor="${anc}" font-size="12" font-weight="700" fill="var(--ink)">${l}</text><text x="${x}" y="${y+dy+9}" text-anchor="${anc}" font-size="11" fill="var(--muted)" font-family="IBM Plex Mono,monospace">${v.toFixed(1)}</text>`});
+  return `<div class="radar-wrap"><svg class="radar" viewBox="0 0 ${W} ${H}" role="img" aria-label="味わいの予測：${sc.map(([l,v])=>l+' '+v.toFixed(1)).join('、')}">${g}</svg></div>`;
+}
 function tasteHTML(m){
   if(m.og==null||m.fg==null)return '';
   const cl=v=>Math.max(0,Math.min(5,v));
   const ibu=m.ibu||0,gu=(m.og-1)*1000,bugu=gu>0?ibu/gu:0,fgP=plato(m.fg),abv=m.abv||0,aa=(m.og-m.fg)/(m.og-1)*100;
-  const sc=[['苦味',cl(ibu/14),'--g2'],['甘み',cl(fgP/1.1*(1-0.35*Math.min(1,bugu))),'--accent'],['ボディ',cl((fgP+abv*0.15)/1.2),'--g1'],['アルコール感',cl(abv/1.8),'--g3'],['キレ（ドライ）',cl((aa-60)/6),'--hop']];
+  const sc=[['苦味',cl(ibu/14),'--g2'],['甘み',cl(fgP/1.1*(1-0.35*Math.min(1,bugu))),'--accent'],['ボディ',cl((fgP+abv*0.15)/1.2),'--g1'],['アルコール感',cl(abv/1.8),'--g3'],['キレ',cl((aa-60)/6),'--hop']];
   const pos=Math.min(100,Math.max(0,bugu/1.2*100));
   const bal=bugu<0.3?'甘くモルティ':bugu<0.45?'ややモルト寄り':bugu<0.65?'苦味と甘みが釣り合う':bugu<0.85?'ややホップ寄り':'苦味がはっきり';
   const words=[];
@@ -851,7 +876,7 @@ function tasteHTML(m){
   return `<div class="taste"><div class="label">味わいの予測</div>
     <div class="balance"><span>甘い</span><span class="baltrack"><i style="left:${pos}%"></i></span><span>苦い</span></div>
     <div class="balnote">${bal}（BU:GU ${bugu.toFixed(2)}）。${words.join('、')}味わい。</div>
-    <div class="tbars">${sc.map(([l,v,c])=>`<div class="trow"><span>${l}</span><span class="tbar"><i style="width:${v/5*100}%;background:var(${c})"></i></span><span class="num">${v.toFixed(1)}</span></div>`).join('')}</div>
+    ${radarSVG(sc)}
     <div class="muted small">IBU・FG（残糖）・度数・発酵度から計算した目安です（5段階）。</div></div>`;
 }
 function summaryInner(r,tr,pt,pm){
@@ -1190,10 +1215,14 @@ document.addEventListener('click',e=>{
     case 'gtoggle':{const g=b.dataset.g;r.collapsed=r.collapsed||{};r.collapsed[g]=!r.collapsed[g];save();break}
     case 'exitNo':closeExit(true);return;
     case 'exitYes':doExit();return;
-    case 'new':{const st=b.dataset.style,nr={id:uid(),name:'',style:st,updated:Date.now(),steps:sortSteps(defaultSteps(st)),collapsed:ALLCLOSED()};db.recipes.push(nr);go({screen:'recipe',id:nr.id});save();break}
+    case 'saveRecipe':r.draft=false;touch();toast('レシピを保存しました');break;
+    case 'leaveSave':leaveDecide('save');return;
+    case 'leaveDiscard':leaveDecide('discard');return;
+    case 'leaveCancel':closeLeave();return;
+    case 'new':{const st=b.dataset.style,nr={id:uid(),name:'',style:st,updated:Date.now(),steps:sortSteps(defaultSteps(st)),collapsed:ALLCLOSED(),draft:true};db.recipes.push(nr);go({screen:'recipe',id:nr.id});save();break}
     case 'open':{const d=(b.dataset.kind==='b'?db.brews:db.recipes).find(x=>x.id===id);if(d)d.collapsed=ALLCLOSED();go({screen:b.dataset.kind==='b'?'brew':'recipe',id});break}
     case 'del':{const k=b.dataset.kind;if(prevArmed===k+id){if(k==='r')db.recipes=db.recipes.filter(x=>x.id!==id);else db.brews=db.brews.filter(x=>x.id!==id);save()}else armed=k+id;break}
-    case 'startBrew':{const nb=startBrew(r);db.brews.push(nb);go({screen:'brew',id:nb.id});save();break}
+    case 'startBrew':{if(r.draft)r.draft=false;const nb=startBrew(r);db.brews.push(nb);go({screen:'brew',id:nb.id});save();break}
     case 'tpl':{const have=new Set(r.steps.map(x=>x.type));STYLES[r.style].tpl.filter(k=>!have.has(k)).forEach(k=>{const s=mkStep(k,r.style);s.open=false;r.steps.push(s)});sortSteps(r.steps);r.collapsed={};touch();break}
     case 'sheet':sheet=b.dataset.g||'brew';history.pushState({app:1},'');break;
     case 'close':if(sheet)history.back();return;
@@ -1217,9 +1246,13 @@ document.addEventListener('click',e=>{
    ホームでさらに戻ると、終了の確認を出す */
 let stack=[],exitOpen=false;
 function go(v){stack.push(view);view=v;sheet=false;history.pushState({app:1},'');window.scrollTo(0,0)}
+let leaveOK=false;
 addEventListener('popstate',()=>{
   if(exitOpen){closeExit(true);return}
+  if(document.getElementById('leavedlg')){closeLeave();history.pushState({app:1},'');return}
   if(sheet){sheet=false;render();return}
+  if(!leaveOK&&view.screen==='recipe'){const r=cur();if(r&&r.draft){history.pushState({app:1},'');openLeave();return}}
+  leaveOK=false;
   if(stack.length){view=stack.pop();armed=null;render();window.scrollTo(0,0);return}
   openExit();
 });
@@ -1228,6 +1261,17 @@ function openExit(){
   if(!d){d=document.createElement('div');d.id='exitdlg';document.body.appendChild(d)}
   d.innerHTML=`<div class="scrim center"><div class="dialog" role="alertdialog" aria-labelledby="exit-t"><h2 id="exit-t">アプリを終了しますか？</h2><p id="exit-msg" class="hint">入力した内容は保存されています。</p><div class="dlg-btns"><button class="ghost big" data-act="exitNo">いいえ</button><button class="primary small" data-act="exitYes">はい</button></div></div></div>`;
 }
+function openLeave(){
+  const d=document.createElement('div');d.id='leavedlg';document.body.appendChild(d);
+  d.innerHTML=`<div class="scrim center"><div class="dialog" role="alertdialog" aria-labelledby="leave-t"><h2 id="leave-t">このレシピを保存しますか？</h2><p class="hint">保存しないで戻ると、このレシピは消えます。</p><div class="dlg-btns col"><button class="primary" data-act="leaveSave">保存して戻る</button><button class="ghost big warn" data-act="leaveDiscard">保存しないで戻る</button><button class="ghost big" data-act="leaveCancel">編集を続ける</button></div></div></div>`;
+}
+function closeLeave(){const d=document.getElementById('leavedlg');if(d)d.remove()}
+function leaveDecide(k){
+  const r=cur();closeLeave();
+  if(r){if(k==='save'){r.draft=false;r.updated=Date.now()}else db.recipes=db.recipes.filter(x=>x.id!==r.id);save()}
+  leaveOK=true;history.back();
+}
+function toast(msg){let t=document.getElementById('toast');if(!t){t=document.createElement('div');t.id='toast';t.setAttribute('role','status');document.body.appendChild(t)}t.textContent=msg;t.className='show';clearTimeout(t._h);t._h=setTimeout(()=>{t.className=''},2200)}
 function closeExit(repush){exitOpen=false;const d=document.getElementById('exitdlg');if(d)d.remove();if(repush)history.pushState({app:1},'')}
 function doExit(){
   exitOpen=false;
