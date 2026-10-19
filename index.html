@@ -390,7 +390,7 @@ function mkStep(type,style){
 }
 function fixExtra(s){
   if(s.list)s.list.forEach(it=>{if(it.cat==null)it.cat=findCat(CATKIND[s.type],it.name)});
-  if(s.type==='boil'){if(!Array.isArray(s.hops))s.hops=[];if(!s.p.hopOut)s.p.hopOut='before'}
+  if(s.type==='boil'){if(!Array.isArray(s.hops))s.hops=[];if(!s.p.hopOut)s.p.hopOut='before';if(!s.p.fine)s.p.fine='none';if(s.p.fineDose==null)s.p.fineDose='';if(s.p.fineT==null)s.p.fineT='15'}
   if(s.type==='carbonation'){const D={cmethod:'forced',vols:'2.5',temp:'2',days:'3'};for(const k in D)if(s.p[k]==null)s.p[k]=D[k]}
   if(s.type==='water'){if(!s.p.ph0)s.p.ph0='7.0';if(!s.p.alk)s.p.alk='40';if(s.p.ph==null)s.p.ph='5.5';if(s.p.skip==null)s.p.skip=false}
   if(s.type==='dryhop'&&!Array.isArray(s.hops))s.hops=[];
@@ -761,6 +761,7 @@ function stepSummary(s){
   if(s.type==='yeast'){if(s.p.name)bits.push(s.p.name);if(s.p.atten)bits.push(`発酵度 ${s.p.atten}%`)}
   if(s.type==='carbonation'){bits.push(s.p.cmethod==='priming'?'砂糖（瓶内発酵）':'ガス注入');if(s.p.vols)bits.push(`${s.p.vols} vol`);if(s.p.temp)bits.push(`${s.p.temp}℃`);if(s.p.days)bits.push(`${s.p.days}日`)}
   (t.fields||[]).forEach(f=>{const v=s.p[f.k];if(v!==''&&v!=null)bits.push(f.t==='text'?v:`${f.l} ${v}${f.u==='SG'||f.u==='pH'?'':f.u}`)});
+  if(s.type==='boil'&&FINE[s.p.fine])bits.push(`${FINE[s.p.fine].n} ${s.p.fineDose||FINE[s.p.fine].d}g/L・${s.p.fineT||15}分前`);
   if(s.hops&&s.hops.length)bits.push(s.hops.filter(h=>h.name).map(h=>`${h.name}${h.g?' '+h.g+'g':''}${s.type==='boil'&&h.t!==''?' '+h.t+'分':''}`).join('、'));
   if(s.list){const it=s.list.filter(x=>x.name);if(it.length)bits.push(it.map(x=>x.name+(x.amt?` ${x.amt}${x.unit||'kg'}`:'')).join('、'))}
   return bits.join(' · ')||t.sub;
@@ -926,6 +927,7 @@ function stepHTML(r,s,i,t,p,first,last){
     if(s.type==='yeast')h+=yeastBody(s);
     if(ty.list&&s.type!=='water')h+=listHTML(s,ty.list);
     if(s.hops)h+=hopsHTML(s);
+    if(s.type==='boil')h+=fineHTML(s,t);
     if(ty.hint)h+=`<p class="hint">${ty.hint}</p>`;
     if(s.type==='dilute'||s.type==='trub')h+=`<div id="help-${s.id}">${diluteHelp(s,t)}</div>`;
     if(['mash','dissolve','boil','bottle','carbonation',...FERMSTEPS].includes(s.type))h+=`<div id="info-${s.id}">${calcInfo(t)}</div>`;
@@ -1089,6 +1091,23 @@ function listHTML(s,L){
   return `<div class="listed"><span class="label">${kind==='add'?'添加物':'投入するもの'}</span>${s.list.map((it,j)=>itemRow(s,'list',j,it,kind)).join('')}
     ${hint?`<p class="hint">${hint}</p>`:''}<button class="addrow" data-act="addItem" data-g="list" data-id="${s.id}">＋ 行を追加</button></div>`;
 }
+/* 清澄剤：寒天（1Lあたり0.12 g）、カラギナン（同0.06 g）が初期値。ボイル後の液量にかけて投入量を出す */
+const FINE={agar:{n:'寒天',d:0.12},carrag:{n:'カラギナン',d:0.06}};
+function fineRes(s,t){
+  const f=FINE[s.p.fine];if(!f)return '';
+  const dose=n(s.p.fineDose)??f.d,V=t&&t.info&&t.info.V!=null?t.info.V:t&&t.vol,mins=n(s.p.fineT)??15,bt=n(s.p.time);
+  const at=bt!=null?Math.max(0,bt-mins):null;
+  return `<div class="calc"><div>${f.n} <span class="num">${dose} g/L</span>${V!=null?` × ボイル後 <span class="num">${fv(V)} L</span>`:''}</div>
+    <div class="calc-res">→ ${V!=null?`<b class="num">${(dose*V).toFixed(2)} g</b> を`:'（液量がわかると投入量を計算します）'} ボイル終了の <b class="num">${mins} 分前</b>に投入${at!=null?`（煮沸開始から ${at} 分後）`:''}</div>
+    <div class="muted">${s.p.fine==='agar'?'寒天は少量の熱湯でよく溶かしてから入れると、ダマになりません。':'カラギナン（アイリッシュモスの成分）はそのまま振り入れて、よくかき混ぜます。'}冷却すると、タンパク質と一緒に固まって沈みます。</div></div>`;
+}
+function fineHTML(s,t){
+  const f=FINE[s.p.fine];
+  let h=`<div class="listed"><span class="label">清澄剤</span>${seg(s.id,'fine',s.p.fine,[['none','使わない'],['agar','寒天'],['carrag','カラギナン']])}`;
+  if(f)h+=`<div class="fields">${inputHTML(s.id,'p',{k:'fineDose',l:'1Lあたりの量（初期値 '+f.d+' g）',u:'g/L'},s.p.fineDose)}${inputHTML(s.id,'p',{k:'fineT',l:'投入するタイミング',u:'分前'},s.p.fineT)}</div>
+    <div id="fineres-${s.id}">${fineRes(s,t)}</div>`;
+  return h+`</div>`;
+}
 function hopsHTML(s){
   const boil=s.type==='boil';
   return `<div class="listed"><span class="label">ホップ</span>${s.hops.map((h,j)=>itemRow(s,'hops',j,h,'hop')).join('')}
@@ -1123,6 +1142,7 @@ function refreshComputed(){
   r.steps.forEach((s,i)=>{const a=document.getElementById('after-'+s.id);if(a)a.innerHTML=s.type==='water'?phHTML(s,brew):afterHTML(tr[i],pt&&pt[s.id],brew);
     if(s.type==='water'&&document.getElementById('wadd-'+s.id))waterRefresh(s);
     const h=document.getElementById('help-'+s.id);if(h)h.innerHTML=diluteHelp(s,tr[i]);
+    if(s.type==='boil'){const fr=document.getElementById('fineres-'+s.id);if(fr)fr.innerHTML=fineRes(s,tr[i])}
     const c=document.getElementById('info-'+s.id);if(c)c.innerHTML=calcInfo(tr[i])});
 }
 function touch(){const r=cur();if(r)r.updated=Date.now();save()}
@@ -1186,7 +1206,7 @@ document.addEventListener('click',e=>{
     case 'dels':if(prevArmed===id){r.steps.splice(idx,1);touch()}else armed=id;break;
     case 'addItem':{const s=r.steps[idx];if(b.dataset.g==='hops')s.hops.push({cat:'',name:'',alpha:'',g:'',t:s.type==='boil'?'0':''});else s.list.push(CATKIND[s.type]==='add'?{cat:'',name:'',amt:'',unit:'g'}:{cat:'',name:'',amt:'',yld:''});touch();break}
     case 'delItem':(b.dataset.g==='hops'?r.steps[idx].hops:r.steps[idx].list).splice(+b.dataset.j,1);touch();break;
-    case 'seg':r.steps[idx].p[b.dataset.k]=b.dataset.v;touch();break;
+    case 'seg':{const st=r.steps[idx];st.p[b.dataset.k]=b.dataset.v;if(b.dataset.k==='fine'&&FINE[b.dataset.v]){st.p.fineDose=String(FINE[b.dataset.v].d);if(!st.p.fineT)st.p.fineT='15'}touch();break}
     case 'addRest':{const rs=r.steps[idx].rests,l=rs[rs.length-1];rs.push({temp:l?String((n(l.temp)||60)+6):'66',time:'20'});touch();break}
     case 'delRest':r.steps[idx].rests.splice(+b.dataset.j,1);touch();break;
     case 'applyDil':r.steps[idx].p.add=b.dataset.v;touch();break;
